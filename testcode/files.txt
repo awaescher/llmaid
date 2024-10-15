@@ -1,0 +1,15 @@
+FileReader.cs
+ - should change the class summary as it is wrong
+ - should add a summary to the Path property with "Gets"
+ - should fix the summary of the constructor and Read() and either remove empty tags or complete them
+ - should remove the wrong argument summary for ignoreCase
+
+SystemInfo.cs
+ - should add a summary for the record itself
+ - should add summaries to the record parameters (readonly, so they should start with "Gets")
+ - Same for the property RamUsedBytes
+
+frmMain
+ - should add summaries to the form
+ - should TODO and empty argument summaries
+ - methods are private, summaries are optional
