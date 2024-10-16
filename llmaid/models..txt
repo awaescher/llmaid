@@ -1,0 +1,13 @@
+﻿# codestral:22b
+> Pretty good
+Took 32 minutes for awaescher/StageManager to complete.
+Made greeat summaries with argument descriptions but changed code, even deleted code blocks for several files.
+
+# mistral-small:22b
+> Pretty good
+Made greeat summaries with argument descriptions but changed code, even deleted code blocks for several files.
+
+# llama3.2:3b
+> Suprisingly good but not reliable
+Pretty good for its small size. Comments were good, speed is great. But it failes in details like readonly properties. Also it modifies code from time to time.
+Worst is that sometimes it describes the code instead of rewriting it and also it can format code blocks in an unexpected way which breaks the CodeBlockParser.

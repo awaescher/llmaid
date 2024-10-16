@@ -3,7 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.11.35222.181
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "llmaid", "llmaid\llmaid.csproj", "{D2B69FB3-99A1-4CC9-91F8-E01A693D3C01}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "llmaid", "llmaid\llmaid.csproj", "{D2B69FB3-99A1-4CC9-91F8-E01A693D3C01}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tests", "Tests\Tests.csproj", "{877EE020-CF06-4CC1-8703-F6C740C6A226}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +17,10 @@ Global
 		{D2B69FB3-99A1-4CC9-91F8-E01A693D3C01}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D2B69FB3-99A1-4CC9-91F8-E01A693D3C01}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D2B69FB3-99A1-4CC9-91F8-E01A693D3C01}.Release|Any CPU.Build.0 = Release|Any CPU
+		{877EE020-CF06-4CC1-8703-F6C740C6A226}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{877EE020-CF06-4CC1-8703-F6C740C6A226}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{877EE020-CF06-4CC1-8703-F6C740C6A226}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{877EE020-CF06-4CC1-8703-F6C740C6A226}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

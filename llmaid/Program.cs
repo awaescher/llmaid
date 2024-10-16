@@ -1,175 +1,200 @@
-﻿using Microsoft.Extensions.Configuration;
+using System.Diagnostics;
+using System.Text;
+using Microsoft.Extensions.Configuration;
 using OllamaSharp;
 using OllamaSharp.Models.Chat;
-using System.IO.Enumeration;
-using System.Text;
-using System.Text.RegularExpressions;
+using Spectre.Console;
 
 namespace llmaid;
 
-internal class Program
+internal static class Program
 {
-    static async Task Main(string[] args)
-    {
-        var cancellationTokenSource = new CancellationTokenSource();
-        var cancellationToken = cancellationTokenSource.Token;
+	static async Task Main(string[] args)
+	{
+		using var cancellationTokenSource = new CancellationTokenSource();
+		var cancellationToken = cancellationTokenSource.Token;
 
-        // Aufbau der Konfiguration
-        var config = new ConfigurationBuilder()
-            .SetBasePath(Directory.GetCurrentDirectory())
-            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-            .AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production"}.json", optional: true)
-            .Build();
+		var config = new ConfigurationBuilder()
+			.SetBasePath(Directory.GetCurrentDirectory())
+			.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+			.AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production"}.json", optional: true)
+			.Build();
 
-        // Bindung der Konfiguration an die Arguments-Klasse
-        var arguments = config.GetSection("Arguments").Get<Arguments>();
+		var arguments = config.GetSection("Arguments").Get<Arguments>() ?? throw new ArgumentException("Arguments could not be parsed.");
+		arguments.Validate();
 
-        // Validierung der Argumente
-        arguments.Validate();
+		var systemPromptTemplate = await File.ReadAllTextAsync(arguments.PromptFile, cancellationToken);
 
-        var systemPromptTemplate = await File.ReadAllTextAsync(arguments.PromptFile, cancellationToken);
+		var ollama = new OllamaApiClient(arguments.Uri, arguments.Model);
+		var loader = new FileLoader();
+		var totalStopWatch = Stopwatch.StartNew();
 
-        var loader = new FileLoader();
+		foreach (var file in loader.Get(arguments.SourcePath, arguments.FilePatterns))
+		{
+			var originalCode = await File.ReadAllTextAsync(file, cancellationToken);
 
-        var ollama = new OllamaApiClient(arguments.OllamaUri, arguments.Model);
+			if (originalCode.Length < 1)
+			{
+				Warning($"Skipped file {file}: No content.");
+				continue;
+			}
+			Information($"{file} ({originalCode.Length} char{(originalCode.Length == 1 ? "" : "s")})");
 
-        foreach (var file in loader.Get(arguments.SourcePath, arguments.FilePatterns))
-        {
-            Console.WriteLine($"Processing {file} ...");
+			var systemPrompt = systemPromptTemplate
+				.Replace("%CODE%", originalCode)
+				.Replace("%CODELANGUAGE%", GetCodeLanguageByFileExtension(Path.GetExtension(file)))
+				.Replace("%FILENAME%", Path.GetFileName(file));
 
-            var code = await File.ReadAllTextAsync(file, cancellationToken);
-            var systemPrompt = systemPromptTemplate
-                .Replace("%CODE%", code)
-                .Replace("%CODELANGUAGE%", GetCodeLanguageByFileExtension(Path.GetExtension(file)))
-                .Replace("%FILENAME%", Path.GetFileName(file));
-
-            var userPrompt = """
+			var userPrompt = """
 %FILENAME%
 ``` %CODELANGUAGE%
 %CODE%
 ```
 """;
-            userPrompt = userPrompt
-                .Replace("%CODE%", code)
-                .Replace("%CODELANGUAGE%", GetCodeLanguageByFileExtension(Path.GetExtension(file)))
-                .Replace("%FILENAME%", Path.GetFileName(file));
+			userPrompt = userPrompt
+				.Replace("%CODE%", originalCode)
+				.Replace("%CODELANGUAGE%", GetCodeLanguageByFileExtension(Path.GetExtension(file)))
+				.Replace("%FILENAME%", Path.GetFileName(file));
 
-            var chat = new Chat(ollama);
-            chat.Messages.Add(new Message { Role = ChatRole.System, Content = systemPrompt });
+			var chat = new Chat(ollama);
+			chat.Messages.Add(new Message { Role = ChatRole.System, Content = systemPrompt });
 
-            var originalCodeLength = code.Length;
-            var builder = new StringBuilder();
+			if (arguments.Temperature.HasValue)
+				chat.Options = new OllamaSharp.Models.RequestOptions { Temperature = arguments.Temperature };
 
-            var response = await chat.Send(userPrompt, cancellationToken).StreamToEnd(token => 
-            { 
-                builder.Append(token);
-                UpdateProgress(originalCodeLength, builder.Length);
-            });
+			var generatedCodeBuilder = new StringBuilder();
 
-            if (arguments.DryRunToConsole)
-            {
-                Console.WriteLine(response);
-            }
-            else
-            {
-                var extractedCode = ExtractCode(response);
-                await File.WriteAllTextAsync(file, extractedCode, cancellationToken);
-            }
-        }
+			var response = "";
 
-        Console.WriteLine("Finished.");
-    }
+			var stopwatch = Stopwatch.StartNew();
 
-    private static void UpdateProgress(int originalCodeLength, int generatedCodeLength)
-    {
-        var percentage = 0.0d;
+			await AnsiConsole.Progress()
+				.AutoClear(true)
+				.Columns(new TaskDescriptionColumn(), new ProgressBarColumn(), new PercentageColumn(), new RemainingTimeColumn(), new SpinnerColumn())
+				.StartAsync(async ctx =>
+				{
+					var sendTask = ctx.AddTask("[green]Sending[/]");
+					var waitTask = ctx.AddTask("[green]Waiting[/]");
+					var receiveTask = ctx.AddTask("[green]Receiving[/]");
 
-        if (originalCodeLength > 0 && generatedCodeLength > 0)
-            percentage = ((double)generatedCodeLength / (double)originalCodeLength) * 100;
+					while (!ctx.IsFinished)
+					{
+						sendTask.Increment(100);
 
-        percentage = Math.Min(100, Math.Max(0, percentage));
+						response = await chat.Send(userPrompt, cancellationToken).StreamToEnd(token =>
+						{
+							if (waitTask.Value == 0)
+								waitTask.Increment(100);
 
-        Console.WriteLine($"{percentage:0}%");
-    }
+							generatedCodeBuilder.Append(token);
+							receiveTask.Value = CalculateProgress(generatedCodeBuilder.Length, originalCode.Length * 1.20);  // fake the estimated length, the LLM is going to extend the class
+						});
 
-    private static string ExtractCode(string text)
-    {
-        string pattern = @"\`\`\`\s?(?:\w+)?\s*([\s\S]*?)\`\`\`";
+						receiveTask.Value = 100;
+					}
+				});
 
-        foreach (Match match in Regex.Matches(text, pattern).Where(m => m.Groups.Count > 1))
-            return match.Groups[1].Value.Trim();
+			stopwatch.Stop();
 
-        return "";
-    }
+			if (arguments.WriteCodeToConsole)
+			{
+				Information("");
+				Code(response);
+			}
 
-    private static string GetCodeLanguageByFileExtension(string fileExtension)
-    {
-        return fileExtension.ToLower() switch
-        {
-            ".cs" => "csharp",
-            ".js" => "javascript",
-            ".ts" => "typescript",
-            ".java" => "java",
-            ".py" => "python",
-            ".cpp" => "cpp",
-            ".c" => "c",
-            ".rb" => "ruby",
-            ".php" => "php",
-            ".html" => "html",
-            ".css" => "css",
-            ".xml" => "xml",
-            ".json" => "json",
-            ".sh" => "bash",
-            ".vb" => "visualbasic",
-            ".md" => "markdown",
-            _ => ""
-        };
-    }
+			var extractedCode = CodeBlockExtractor.Extract(response);
+			var couldExtractCode = !string.IsNullOrWhiteSpace(extractedCode);
+			if (!couldExtractCode)
+				Error("Could not extract code from the model's response. It seems that there's no valid code block.");
 
-    public class FileLoader : IFileLoader
-    {
-        public IEnumerable<string> Get(string path, string[] searchPatterns)
-        {
-            foreach (var pattern in searchPatterns)
-            {
-                foreach (var entry in Directory.GetFileSystemEntries(path, pattern, SearchOption.AllDirectories))
-                {
-                    yield return entry;
-                }
-            }
-        }
-    }
+			if (!arguments.DryRun && couldExtractCode)
+				await File.WriteAllTextAsync(file, extractedCode, cancellationToken);
 
-    public class Arguments
-    {
-        public Uri OllamaUri { get; set; }
+			Detail($"{stopwatch.Elapsed}{Environment.NewLine}");
+		}
 
-        public string Model { get; set; }
+		Information("Finished in " + totalStopWatch.Elapsed.ToString());
+	}
 
-        public string SourcePath { get; set; }
+	private static void WriteLine(string color, string message)
+	{
+		AnsiConsole.MarkupLine($"[{color}]{Markup.Escape(message)}[/]");
+	}
 
-        public string[] FilePatterns { get; set; } = [];
+	private static void Information(string message) => WriteLine("white", message);
 
-        public string PromptFile { get; set; }
+	private static void Warning(string message) => WriteLine("yellow", message);
 
-        public bool DryRunToConsole { get; set; } = true;
+	private static void Error(string message) => WriteLine("red", message);
 
-        public void Validate()
-        {
-            if (string.IsNullOrEmpty(OllamaUri?.AbsolutePath))
-                throw new ArgumentException("OllamaUri has to be defined.");
+	private static void Code(string message) => WriteLine("cyan", message);
 
-            if (FilePatterns?.Any() == false)
-                throw new ArgumentException("At least one file pattern must be defined.");
+	private static void Detail(string message) => WriteLine("gray", message);
 
-            if (string.IsNullOrEmpty(SourcePath))
-                throw new ArgumentException("Source path has to be defined.");
+	private static int CalculateProgress(double generatedCodeLength, double originalCodeLength)
+	{
+		var percentage = 0.0d;
 
-            if (string.IsNullOrEmpty(Model))
-                throw new ArgumentException("Model has to be defined.");
+		if (originalCodeLength > 0 && generatedCodeLength > 0)
+			percentage = (generatedCodeLength / originalCodeLength) * 100;
 
-            if (string.IsNullOrWhiteSpace(PromptFile) || !File.Exists(PromptFile))
-                throw new FileNotFoundException($"Prompt file '{PromptFile}' does not exist.");
-        }
-    }
+		return Math.Min(100, Math.Max(0, (int)percentage));
+	}
+
+	private static string GetCodeLanguageByFileExtension(string fileExtension)
+	{
+		return fileExtension.ToLower() switch
+		{
+			".cs" => "csharp",
+			".js" => "javascript",
+			".ts" => "typescript",
+			".java" => "java",
+			".py" => "python",
+			".cpp" => "cpp",
+			".c" => "c",
+			".rb" => "ruby",
+			".php" => "php",
+			".html" => "html",
+			".css" => "css",
+			".xml" => "xml",
+			".json" => "json",
+			".sh" => "bash",
+			".vb" => "vbnet",
+			".md" => "markdown",
+			".rs" => "rust",
+			".go" => "go",
+			".swift" => "swift",
+			".kt" => "kotlin",
+			".m" => "objectivec",
+			".pl" => "perl",
+			".r" => "r",
+			".sql" => "sql",
+			".scss" => "scss",
+			".less" => "less",
+			".scala" => "scala",
+			".lua" => "lua",
+			".dart" => "dart",
+			".jsx" => "javascript",
+			".tsx" => "typescript",
+			".bat" => "bat",
+			".cmd" => "bat",
+			".ini" => "ini",
+			".cfg" => "ini",
+			".yaml" => "yaml",
+			".yml" => "yaml",
+			".h" => "c",
+			".hpp" => "cpp",
+			".coffee" => "coffeescript",
+			".erl" => "erlang",
+			".ex" => "elixir",
+			".exs" => "elixir",
+			".hs" => "haskell",
+			".jl" => "julia",
+			".ps1" => "powershell",
+			".f90" => "fortran",
+			".asm" => "nasm",
+			".v" => "verilog",
+			_ => ""
+		};
+	}
 }
