@@ -17,6 +17,7 @@ internal static class Program
 		var config = new ConfigurationBuilder()
 			.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
 			.AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production"}.json", optional: true)
+			.AddJsonFile($"appsettings.{(Debugger.IsAttached ? "VisualStudio" : "Production")}.json", optional: true)
 			.Build();
 
 		var arguments = config.Get<Arguments>() ?? throw new ArgumentException("Arguments could not be parsed.");
