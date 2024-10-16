@@ -18,7 +18,7 @@ dotnet restore
 # edit appsettings.json to your needs
 # edit systemprompt.txt to your needs
 
-dotnet run
+dotnet run --project llmaid
 ```
 
 ## Configuration
