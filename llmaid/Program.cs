@@ -20,7 +20,7 @@ internal static class Program
 			.AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production"}.json", optional: true)
 			.Build();
 
-		var arguments = config.GetSection("Arguments").Get<Arguments>() ?? throw new ArgumentException("Arguments could not be parsed.");
+		var arguments = config.Get<Arguments>() ?? throw new ArgumentException("Arguments could not be parsed.");
 		arguments.Validate();
 
 		var systemPromptTemplate = await File.ReadAllTextAsync(arguments.PromptFile, cancellationToken);
@@ -107,7 +107,7 @@ internal static class Program
 			if (!couldExtractCode)
 				Error("Could not extract code from the model's response. It seems that there's no valid code block.");
 
-			if (!arguments.DryRun && couldExtractCode)
+			if (arguments.ReplaceFiles && couldExtractCode)
 				await File.WriteAllTextAsync(file, extractedCode, cancellationToken);
 
 			Detail($"{stopwatch.Elapsed}{Environment.NewLine}");

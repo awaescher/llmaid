@@ -14,7 +14,7 @@ public class Arguments
 
 	public bool WriteCodeToConsole { get; set; } = true;
 
-	public bool DryRun { get; set; } = true;
+	public bool ReplaceFiles { get; set; } = true;
 
 	public float? Temperature { get; set; }
 
