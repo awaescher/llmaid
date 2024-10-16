@@ -40,6 +40,11 @@ Change the `appsettings.json` file in the root directory to your needs:
 }
 ```
 
+## FAQ
+
+### I get an 404 (Not Found)
+It is very likely that Ollama returns this 404 because it doesn't know the model that's specified in the appsettings.json. Make sure to specify a model you have downloaded.
+
 ---
 
 ❤ Made with [Spectre.Console](https://github.com/spectreconsole/spectre.console) and [OllamaSharp](https://github.com/awaescher/OllamaSharp).
