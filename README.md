@@ -1,6 +1,6 @@
-# LLMaid
+# Large Language Maid
 
-LLMaid is a command-line tool designed to automate the process of AI supported file changes like code refactoring using large language models. It reads source code files, sends them to a Ollama or an OpenAI-compatible API, and writes back the models answers. The tool is highly configurable and supports every kind of text-based input file.
+llmaid is a command-line tool designed to automate the process of AI supported file changes like code refactoring using large language models. It reads source code files, sends them to a Ollama or an OpenAI-compatible API, and writes back the models answers. The tool is highly configurable and supports every kind of text-based input file.
 
 ![image](https://github.com/user-attachments/assets/015ba09b-4ce5-439f-a6af-4e20da6e511e)
 
