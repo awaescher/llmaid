@@ -31,9 +31,9 @@ Change the `appsettings.json` file in the root directory to your needs:
   "Uri": "https://localhost:11434",            // Ollama or OpenAI (compatible) endpoints like http://localhost:11434 or https://api.openai.com
   "ApiKey": ""                                 // not required for Ollama
   "Model": "deepseek-coder-v2:16b",            // the model to use
-  "SourcePath": "./src",                       // the path to look for files to change
-  "FilePatterns": [ "*.cs", "*.js" ],          // the file types to change
   "PromptFile": "./systemprompt.txt",          // the system prompt to prime the model
+  "SourcePath": "./testcode",                  // the path to look for files to change
+  "FilePatterns": [ "*.cs", "*.js" ],          // the file types to change
   "Temperature": 0.7,                          // the models temperature (0 precise to 1 creative)
   "WriteCodeToConsole": true,                  // whether or not the models response should be shown in the console
   "ReplaceFiles": true                         // whether or not the files should be replaced with the model's response
