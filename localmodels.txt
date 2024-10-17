@@ -1,7 +1,7 @@
 ﻿# codestral:22b
 > Pretty good
 Took 32 minutes for awaescher/StageManager to complete.
-Made greeat summaries with argument descriptions but changed code, even deleted code blocks for several files.
+Made great summaries with argument descriptions but changed code, even deleted code blocks for several files.
 
 # mistral-small:22b
 > Pretty good
