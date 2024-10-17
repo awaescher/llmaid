@@ -15,10 +15,8 @@ llmaid is a command-line tool designed to automate the process of AI supported f
 git clone https://github.com/awaescher/llmaid
 cd llmaid
 
-dotnet restore
-
-# edit appsettings.json to your needs
-# edit systemprompt.txt to your needs
+# edit ./llmaid/appsettings.json to your needs
+# edit ./systemprompt.txt to your needs
 
 dotnet run --project llmaid
 ```
