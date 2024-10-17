@@ -3,6 +3,7 @@ using System.Text;
 using llmaid.Streaming;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
+using OllamaSharp;
 using Spectre.Console;
 
 namespace llmaid;
