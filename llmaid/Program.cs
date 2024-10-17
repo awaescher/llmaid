@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using System.Text;
+using llmaid.Streaming;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
-using OllamaSharp;
-using OllamaSharp.Models.Chat;
 using Spectre.Console;
 
 namespace llmaid;
@@ -25,7 +25,15 @@ internal static class Program
 
 		var systemPromptTemplate = await File.ReadAllTextAsync(arguments.PromptFile, cancellationToken);
 
-		var ollama = new OllamaApiClient(arguments.Uri, arguments.Model);
+		IChatClient chatClient;
+
+		if (arguments.Provider.Equals("ollama", StringComparison.OrdinalIgnoreCase))
+			chatClient = new OllamaChatClient(arguments.Uri, arguments.Model);
+		else
+			chatClient = new OpenAIChatClient(new OpenAI.OpenAIClient(arguments.ApiKey), arguments.Model);
+
+		Information($"Running with {arguments.Model} on {arguments.Uri}." + Environment.NewLine);
+
 		var loader = new FileLoader();
 		var totalStopWatch = Stopwatch.StartNew();
 
@@ -56,15 +64,19 @@ internal static class Program
 				.Replace("%CODELANGUAGE%", GetCodeLanguageByFileExtension(Path.GetExtension(file)))
 				.Replace("%FILENAME%", Path.GetFileName(file));
 
-			var chat = new Chat(ollama);
-			chat.Messages.Add(new Message { Role = ChatRole.System, Content = systemPrompt });
+			var messages = new List<ChatMessage>
+			{
+				new() { Role = ChatRole.Assistant, Text = systemPrompt }
+			};
+
+			ChatOptions? options = null;
 
 			if (arguments.Temperature.HasValue)
-				chat.Options = new OllamaSharp.Models.RequestOptions { Temperature = arguments.Temperature };
+				options = new ChatOptions { Temperature = arguments.Temperature };
 
 			var generatedCodeBuilder = new StringBuilder();
 
-			var response = "";
+			StreamingChatCompletionUpdate? response = null;
 
 			var stopwatch = Stopwatch.StartNew();
 
@@ -81,12 +93,14 @@ internal static class Program
 					{
 						sendTask.Increment(100);
 
-						response = await chat.Send(userPrompt, cancellationToken).StreamToEnd(token =>
+						messages.Add(new ChatMessage { Role = ChatRole.User, Text = userPrompt });
+
+						response = await chatClient.CompleteStreamingAsync(messages, options, cancellationToken).StreamToEnd(token =>
 						{
 							if (waitTask.Value == 0)
 								waitTask.Increment(100);
 
-							generatedCodeBuilder.Append(token);
+							generatedCodeBuilder.Append(token.Text);
 							receiveTask.Value = CalculateProgress(generatedCodeBuilder.Length, originalCode.Length * 1.20);  // fake the estimated length, the LLM is going to extend the class
 						});
 
@@ -99,10 +113,10 @@ internal static class Program
 			if (arguments.WriteCodeToConsole)
 			{
 				Information("");
-				Code(response);
+				Code(response?.Text ?? "");
 			}
 
-			var extractedCode = CodeBlockExtractor.Extract(response);
+			var extractedCode = CodeBlockExtractor.Extract(response?.Text ?? "");
 			var couldExtractCode = !string.IsNullOrWhiteSpace(extractedCode);
 			if (!couldExtractCode)
 				Error("Could not extract code from the model's response. It seems that there's no valid code block.");
