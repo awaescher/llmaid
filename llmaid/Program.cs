@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Text;
-using llmaid.Streaming;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using OllamaSharp;
@@ -29,7 +28,7 @@ internal static class Program
 		IChatClient chatClient;
 
 		if (arguments.Provider.Equals("ollama", StringComparison.OrdinalIgnoreCase))
-			chatClient = new OllamaChatClient(arguments.Uri, arguments.Model);
+			chatClient = new OllamaApiClient(arguments.Uri, arguments.Model);
 		else
 			chatClient = new OpenAIChatClient(new OpenAI.OpenAIClient(arguments.ApiKey), arguments.Model);
 
@@ -96,12 +95,12 @@ internal static class Program
 
 						messages.Add(new ChatMessage { Role = ChatRole.User, Text = userPrompt });
 
-						response = await chatClient.CompleteStreamingAsync(messages, options, cancellationToken).StreamToEnd(token =>
+						response = await chatClient.CompleteStreamingAsync(messages, options, cancellationToken).StreamToEndAsync(token =>
 						{
 							if (waitTask.Value == 0)
 								waitTask.Increment(100);
 
-							generatedCodeBuilder.Append(token.Text);
+							generatedCodeBuilder.Append(token?.Text ?? "");
 							receiveTask.Value = CalculateProgress(generatedCodeBuilder.Length, originalCode.Length * 1.20);  // fake the estimated length, the LLM is going to extend the class
 						});
 
