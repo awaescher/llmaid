@@ -1,13 +1,13 @@
 # LLMaid
 
-LLMaid is a command-line tool designed to automate the process of AI supported file changes like code refactoring using large language models. It reads source code files, sends them to a the Ollama API, and writes back the models answers. The tool is highly configurable and supports every kind of text-based input file.
+LLMaid is a command-line tool designed to automate the process of AI supported file changes like code refactoring using large language models. It reads source code files, sends them to a Ollama or an OpenAI-compatible API, and writes back the models answers. The tool is highly configurable and supports every kind of text-based input file.
 
 ![image](https://github.com/user-attachments/assets/015ba09b-4ce5-439f-a6af-4e20da6e511e)
 
 ## Prerequisites
 
 - [.NET 8.0 SDK](https://dotnet.microsoft.com/download)
-- An Ollama instance
+- An Ollama instance or an OpenAI-compatible API including api key
 
 ## Installation
 
@@ -29,8 +29,10 @@ Change the `appsettings.json` file in the root directory to your needs:
 
 ```json
 {
-  "Uri": "https://localhost:11434",            // the Ollama API endpoint
-  "Model": "deepseek-cover-v2:16b",            // the model to use
+	"Provider": "ollama",                        // ollama or openai (works with any compatible api)
+  "Uri": "https://localhost:11434",            // Ollama or OpenAI (compatible) endpoints like http://localhost:11434 or https://api.openai.com
+  "ApiKey": ""                                 // not required for Ollama
+  "Model": "deepseek-coder-v2:16b",            // the model to use
   "SourcePath": "./src",                       // the path to look for files to change
   "FilePatterns": [ "*.cs", "*.js" ],          // the file types to change
   "PromptFile": "./systemprompt.txt",          // the system prompt to prime the model
