@@ -29,7 +29,7 @@ Change the `appsettings.json` file in the root directory to your needs:
 
 ```json
 {
-	"Provider": "ollama",                        // ollama or openai (works with any compatible api)
+  "Provider": "ollama",                        // ollama or openai (works with any compatible api)
   "Uri": "https://localhost:11434",            // Ollama or OpenAI (compatible) endpoints like http://localhost:11434 or https://api.openai.com
   "ApiKey": ""                                 // not required for Ollama
   "Model": "deepseek-coder-v2:16b",            // the model to use
