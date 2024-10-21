@@ -4,7 +4,7 @@ namespace llmaid;
 
 public static partial class CodeBlockExtractor
 {
-	[GeneratedRegex(@"\`\`\`\s?(?:\w+)?\s*([\s\S]*?)\`\`\`")]
+	[GeneratedRegex(@"\`\`\`.*[\n|\r]([\s\S]*)\`\`\`")]
 	private static partial Regex CodeBlockMatchPattern();
 
 	public static string Extract(string text)
