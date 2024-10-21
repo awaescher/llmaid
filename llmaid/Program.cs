@@ -1,8 +1,10 @@
 using System.Diagnostics;
 using System.Text;
+using System.Text.Json;
 using llmaid.Streaming;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
+using Serilog;
 using Spectre.Console;
 
 namespace llmaid;
@@ -10,6 +12,8 @@ namespace llmaid;
 internal static class Program
 {
 	internal static IChatClient ChatClient { get; set; } = null!;
+	internal static int FileCount { get; set; }
+	internal static int CurrentFileIndex { get; set; }
 
 	static async Task Main(string[] args)
 	{
@@ -22,6 +26,11 @@ internal static class Program
 			.AddJsonFile($"appsettings.{(Debugger.IsAttached ? "VisualStudio" : "Production")}.json", optional: true)
 			.Build();
 
+		Log.Logger = new LoggerConfiguration()
+			.WriteTo.File($"./logs/{DateTime.Now:yyyy-MM-dd-hh-mm-ss}.log")
+			.MinimumLevel.Verbose()
+			.CreateLogger();
+
 		var arguments = config.Get<Arguments>() ?? throw new ArgumentException("Arguments could not be parsed.");
 		arguments.Validate();
 
@@ -29,13 +38,18 @@ internal static class Program
 
 		ChatClient = CreateChatClient(arguments);
 
-		Information($"Running with {arguments.Model} on {arguments.Uri}.");
-		Information($"against {arguments.SourcePath}." + Environment.NewLine);
+		Information($"Running {arguments.Model} ({arguments.Uri}) against {arguments.SourcePath}." + Environment.NewLine);
+		Log.Debug(JsonSerializer.Serialize(arguments, new JsonSerializerOptions { WriteIndented = true }));
+		Log.Debug(systemPromptTemplate);
 
 		var loader = new FileLoader();
 		var totalStopWatch = Stopwatch.StartNew();
 
-		foreach (var file in loader.Get(arguments.SourcePath, arguments.FilePatterns))
+		Information($"Locating all files ..." + Environment.NewLine);
+		var files = loader.GetAll(arguments.SourcePath, arguments.FilePatterns);
+		FileCount = files.Length;
+
+		foreach (var file in files)
 			await ProcessFile(file, systemPromptTemplate, arguments, cancellationToken);
 
 		Information("Finished in " + totalStopWatch.Elapsed.ToString());
@@ -43,14 +57,25 @@ internal static class Program
 
 	private static async Task ProcessFile(string file, string systemPromptTemplate, Arguments arguments, CancellationToken cancellationToken)
 	{
-		var originalCode = await File.ReadAllTextAsync(file, cancellationToken);
+		string originalCode = string.Empty;
+
+		try
+		{
+			originalCode = await File.ReadAllTextAsync(file, cancellationToken);
+		}
+		catch (Exception ex)
+		{
+			Error($"Could not read {file}: {ex.Message}");
+			return;
+		}
 
 		if (originalCode.Length < 1)
 		{
 			Warning($"Skipped file {file}: No content.");
 			return;
 		}
-		Information($"{file} ({originalCode.Length} char{(originalCode.Length == 1 ? "" : "s")})");
+
+		Information($"[{++CurrentFileIndex}/{FileCount}] {file} ({originalCode.Length} char{(originalCode.Length == 1 ? "" : "s")})");
 
 		var systemPrompt = systemPromptTemplate
 			.Replace("%CODE%", originalCode)
@@ -149,16 +174,35 @@ internal static class Program
 		AnsiConsole.MarkupLine($"[{color}]{Markup.Escape(message)}[/]");
 	}
 
-	private static void Information(string message) => WriteLine("white", message);
+	private static void Information(string message)
+	{
+		WriteLine("white", message);
+		Log.Information(message);
+	}
 
-	private static void Warning(string message) => WriteLine("yellow", message);
+	private static void Warning(string message)
+	{
+		WriteLine("yellow", message);
+		Log.Warning(message);
+	}
 
-	private static void Error(string message) => WriteLine("red", message);
+	private static void Error(string message)
+	{
+		WriteLine("red", message);
+		Log.Error(message);
+	}
 
-	private static void Code(string message) => WriteLine("cyan", message);
+	private static void Code(string message)
+	{
+		WriteLine("cyan", message);
+		Log.Debug(Environment.NewLine + message);
+	}
 
-	private static void Detail(string message) => WriteLine("gray", message);
-
+	private static void Detail(string message)
+	{
+		WriteLine("gray", message);
+		Log.Verbose(message);
+	}
 	private static int CalculateProgress(double generatedCodeLength, double originalCodeLength)
 	{
 		var percentage = 0.0d;

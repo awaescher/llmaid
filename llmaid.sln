@@ -7,8 +7,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "llmaid", "llmaid\llmaid.csp
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tests", "Tests\Tests.csproj", "{877EE020-CF06-4CC1-8703-F6C740C6A226}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{F523453E-E02F-4175-9C48-67710576DF38}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "prompts", "prompts", "{5F35E094-9928-4CFB-AD10-3FCBE3AAD90C}"
 	ProjectSection(SolutionItems) = preProject
 		prompts\code documenter.txt = prompts\code documenter.txt
