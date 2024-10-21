@@ -18,7 +18,7 @@ public class FileReader
 	/// 
 	/// </summary>
     /// <param name="ignoreCase">Whether or not casing should be ignored</param>
-	/// <returns></returns>
+	/// <returns>Ein feiner Wurstblinker</returns>
 	/// <remarks></remarks>
 	public async Task<string> Read() => await File.ReadAllTextAsync(Path);
 }

@@ -7,6 +7,30 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "llmaid", "llmaid\llmaid.csp
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tests", "Tests\Tests.csproj", "{877EE020-CF06-4CC1-8703-F6C740C6A226}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "prompts", "prompts", "{5F35E094-9928-4CFB-AD10-3FCBE3AAD90C}"
+	ProjectSection(SolutionItems) = preProject
+		prompts\code documenter.txt = prompts\code documenter.txt
+		prompts\unprofessional content filter.txt = prompts\unprofessional content filter.txt
+		prompts\wiki proofreader.txt = prompts\wiki proofreader.txt
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "testfiles", "testfiles", "{F2CE75BE-33F5-40DC-968F-99091455BCF0}"
+	ProjectSection(SolutionItems) = preProject
+		testfiles\cache.php = testfiles\cache.php
+		testfiles\Concurrency.swift = testfiles\Concurrency.swift
+		testfiles\contract.sol = testfiles\contract.sol
+		testfiles\FileReader.cs = testfiles\FileReader.cs
+		testfiles\files.txt = testfiles\files.txt
+		testfiles\frmMain.vb = testfiles\frmMain.vb
+		testfiles\JumpWidget.cpp = testfiles\JumpWidget.cpp
+		testfiles\register.go = testfiles\register.go
+		testfiles\reverse.js = testfiles\reverse.js
+		testfiles\router.rb = testfiles\router.rb
+		testfiles\SystemInfo.cs = testfiles\SystemInfo.cs
+		testfiles\user.ts = testfiles\user.ts
+		testfiles\usermanager.py = testfiles\usermanager.py
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -24,6 +48,10 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{5F35E094-9928-4CFB-AD10-3FCBE3AAD90C} = {F523453E-E02F-4175-9C48-67710576DF38}
+		{F2CE75BE-33F5-40DC-968F-99091455BCF0} = {F523453E-E02F-4175-9C48-67710576DF38}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {20F727A5-80C1-42F1-B633-18919A24EDFC}
