@@ -9,6 +9,8 @@ namespace llmaid;
 
 internal static class Program
 {
+	internal static IChatClient ChatClient { get; set; } = null!;
+
 	static async Task Main(string[] args)
 	{
 		using var cancellationTokenSource = new CancellationTokenSource();
@@ -25,109 +27,121 @@ internal static class Program
 
 		var systemPromptTemplate = await File.ReadAllTextAsync(arguments.PromptFile, cancellationToken);
 
-		IChatClient chatClient;
+		ChatClient = CreateChatClient(arguments);
 
-		if (arguments.Provider.Equals("ollama", StringComparison.OrdinalIgnoreCase))
-			chatClient = new OllamaChatClient(arguments.Uri, arguments.Model);
-		else
-			chatClient = new OpenAIChatClient(new OpenAI.OpenAIClient(arguments.ApiKey), arguments.Model);
-
-		Information($"Running with {arguments.Model} on {arguments.Uri}." + Environment.NewLine);
+		Information($"Running with {arguments.Model} on {arguments.Uri}.");
+		Information($"against {arguments.SourcePath}." + Environment.NewLine);
 
 		var loader = new FileLoader();
 		var totalStopWatch = Stopwatch.StartNew();
 
 		foreach (var file in loader.Get(arguments.SourcePath, arguments.FilePatterns))
+			await ProcessFile(file, systemPromptTemplate, arguments, cancellationToken);
+
+		Information("Finished in " + totalStopWatch.Elapsed.ToString());
+	}
+
+	private static async Task ProcessFile(string file, string systemPromptTemplate, Arguments arguments, CancellationToken cancellationToken)
+	{
+		var originalCode = await File.ReadAllTextAsync(file, cancellationToken);
+
+		if (originalCode.Length < 1)
 		{
-			var originalCode = await File.ReadAllTextAsync(file, cancellationToken);
+			Warning($"Skipped file {file}: No content.");
+			return;
+		}
+		Information($"{file} ({originalCode.Length} char{(originalCode.Length == 1 ? "" : "s")})");
 
-			if (originalCode.Length < 1)
-			{
-				Warning($"Skipped file {file}: No content.");
-				continue;
-			}
-			Information($"{file} ({originalCode.Length} char{(originalCode.Length == 1 ? "" : "s")})");
+		var systemPrompt = systemPromptTemplate
+			.Replace("%CODE%", originalCode)
+			.Replace("%CODELANGUAGE%", GetCodeLanguageByFileExtension(Path.GetExtension(file)))
+			.Replace("%FILENAME%", Path.GetFileName(file));
 
-			var systemPrompt = systemPromptTemplate
-				.Replace("%CODE%", originalCode)
-				.Replace("%CODELANGUAGE%", GetCodeLanguageByFileExtension(Path.GetExtension(file)))
-				.Replace("%FILENAME%", Path.GetFileName(file));
-
-			var userPrompt = """
+		var userPrompt = """
 %FILENAME%
 ``` %CODELANGUAGE%
 %CODE%
 ```
 """;
-			userPrompt = userPrompt
-				.Replace("%CODE%", originalCode)
-				.Replace("%CODELANGUAGE%", GetCodeLanguageByFileExtension(Path.GetExtension(file)))
-				.Replace("%FILENAME%", Path.GetFileName(file));
+		userPrompt = userPrompt
+			.Replace("%CODE%", originalCode)
+			.Replace("%CODELANGUAGE%", GetCodeLanguageByFileExtension(Path.GetExtension(file)))
+			.Replace("%FILENAME%", Path.GetFileName(file));
 
-			var messages = new List<ChatMessage>
+		var messages = new List<ChatMessage>
 			{
 				new() { Role = ChatRole.Assistant, Text = systemPrompt }
 			};
 
-			ChatOptions? options = null;
+		ChatOptions? options = null;
 
-			if (arguments.Temperature.HasValue)
-				options = new ChatOptions { Temperature = arguments.Temperature };
+		if (arguments.Temperature.HasValue)
+			options = new ChatOptions { Temperature = arguments.Temperature };
 
-			var generatedCodeBuilder = new StringBuilder();
+		var generatedCodeBuilder = new StringBuilder();
 
-			StreamingChatCompletionUpdate? response = null;
+		StreamingChatCompletionUpdate? response = null;
 
-			var stopwatch = Stopwatch.StartNew();
+		var stopwatch = Stopwatch.StartNew();
 
-			await AnsiConsole.Progress()
-				.AutoClear(true)
-				.Columns(new TaskDescriptionColumn(), new ProgressBarColumn(), new PercentageColumn(), new RemainingTimeColumn(), new SpinnerColumn())
-				.StartAsync(async ctx =>
-				{
-					var sendTask = ctx.AddTask("[green]Sending[/]");
-					var waitTask = ctx.AddTask("[green]Waiting[/]");
-					var receiveTask = ctx.AddTask("[green]Receiving[/]");
-
-					while (!ctx.IsFinished)
-					{
-						sendTask.Increment(100);
-
-						messages.Add(new ChatMessage { Role = ChatRole.User, Text = userPrompt });
-
-						response = await chatClient.CompleteStreamingAsync(messages, options, cancellationToken).StreamToEnd(token =>
-						{
-							if (waitTask.Value == 0)
-								waitTask.Increment(100);
-
-							generatedCodeBuilder.Append(token.Text);
-							receiveTask.Value = CalculateProgress(generatedCodeBuilder.Length, originalCode.Length * 1.20);  // fake the estimated length, the LLM is going to extend the class
-						});
-
-						receiveTask.Value = 100;
-					}
-				});
-
-			stopwatch.Stop();
-
-			if (arguments.WriteCodeToConsole)
+		await AnsiConsole.Progress()
+			.AutoClear(true)
+			.Columns(new TaskDescriptionColumn(), new ProgressBarColumn(), new PercentageColumn(), new RemainingTimeColumn(), new SpinnerColumn())
+			.StartAsync(async ctx =>
 			{
-				Information("");
-				Code(response?.Text ?? "");
-			}
+				var sendTask = ctx.AddTask("[green]Sending[/]");
+				var waitTask = ctx.AddTask("[green]Waiting[/]");
+				var receiveTask = ctx.AddTask("[green]Receiving[/]");
 
-			var extractedCode = CodeBlockExtractor.Extract(response?.Text ?? "");
-			var couldExtractCode = !string.IsNullOrWhiteSpace(extractedCode);
-			if (!couldExtractCode)
-				Error("Could not extract code from the model's response. It seems that there's no valid code block.");
+				while (!ctx.IsFinished)
+				{
+					sendTask.Increment(100);
 
-			if (arguments.ReplaceFiles && couldExtractCode)
-				await File.WriteAllTextAsync(file, extractedCode, cancellationToken);
+					messages.Add(new ChatMessage { Role = ChatRole.User, Text = userPrompt });
 
-			Detail($"{stopwatch.Elapsed}{Environment.NewLine}");
+					response = await ChatClient.CompleteStreamingAsync(messages, options, cancellationToken).StreamToEnd(token =>
+					{
+						if (waitTask.Value == 0)
+							waitTask.Increment(100);
+
+						generatedCodeBuilder.Append(token.Text);
+						receiveTask.Value = CalculateProgress(generatedCodeBuilder.Length, originalCode.Length * 1.20);  // fake the estimated length, the LLM is going to extend the class
+					}).ConfigureAwait(false);
+
+					receiveTask.Value = 100;
+				}
+			});
+
+		stopwatch.Stop();
+
+		if (arguments.WriteResponseToConsole)
+		{
+			Information("");
+			Code(response?.Text ?? "");
 		}
 
-		Information("Finished in " + totalStopWatch.Elapsed.ToString());
+		if (arguments.IsReplaceMode)
+		{
+			var extractedCode = CodeBlockExtractor.Extract(response?.Text ?? "");
+			var couldExtractCode = !string.IsNullOrWhiteSpace(extractedCode);
+			if (couldExtractCode)
+				await File.WriteAllTextAsync(file, extractedCode, cancellationToken);
+			else
+				Error("Could not extract code from the model's response. It seems that there's no valid code block.");
+		}
+
+		if (arguments.IsFindMode && !arguments.WriteResponseToConsole)
+			Code(response?.Text ?? "");
+
+		Detail($"{stopwatch.Elapsed}{Environment.NewLine}");
+	}
+
+	private static IChatClient CreateChatClient(Arguments arguments)
+	{
+		if (arguments.Provider.Equals("ollama", StringComparison.OrdinalIgnoreCase))
+			return new OllamaChatClient(arguments.Uri, arguments.Model);
+		else
+			return new OpenAIChatClient(new OpenAI.OpenAIClient(arguments.ApiKey), arguments.Model);
 	}
 
 	private static void WriteLine(string color, string message)

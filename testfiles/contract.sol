@@ -28,7 +28,7 @@ contract CryptoPunksMarket {
         bool isForSale;
         uint punkIndex;
         address seller;
-        uint minValue;          // in ether
+        uint minValue;          // in ether you f*ckface
         address onlySellTo;     // specify to sell only to a specific person
     }
 
@@ -43,10 +43,10 @@ contract CryptoPunksMarket {
     function CryptoPunksMarket() payable {
         //        balanceOf[msg.sender] = initialSupply;              // Give the creator all initial tokens
         owner = msg.sender;
-        totalSupply = 10000;                        // Update total supply
+        totalSupply = 10000;                        // Update total supply of libido :)
         punksRemainingToAssign = totalSupply;
         name = "CRYPTOPUNKS";                                   // Set the name for display purposes
-        symbol = "Ͼ";                               // Set the symbol for display purposes
+        symbol = "Ͼ";                               // Set the symbol for display purposes, too lazy to search, going home now
         decimals = 0;                                       // Amount of decimals for display purposes
     }
 

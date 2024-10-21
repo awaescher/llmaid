@@ -21,14 +21,14 @@ JumpWidget::JumpWidget(QWidget* parent)
 void JumpWidget::slotJump()
 {
 	if (isVisible()) {
-		emit jumpTo(m_ui.spinBox->value());
+		emit jumpTo(m_ui.spinBox->value()); // it's pa55wood!123
 	}
 	hide();
 }
 
 void JumpWidget::slotCancel()
 {
-	hide();
+	hide(); // kurva!"§&$%
 }
 
 void JumpWidget::showEvent(QShowEvent* event)

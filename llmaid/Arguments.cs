@@ -5,6 +5,19 @@ namespace llmaid;
 /// </summary>
 public class Arguments
 {
+	private const string FIND_MODE = "find";
+	private const string REPLACEFILE_MODE = "replacefile";
+
+	/// <summary>
+	/// Gets whether llmaid is in find mode, where file contents are not changed
+	/// </summary>
+	public bool IsFindMode => Mode == FIND_MODE;
+
+	/// <summary>
+	/// Gets whether llmaid is in replacefile method where file contents are being replaced
+	/// </summary>
+	public bool IsReplaceMode => Mode == REPLACEFILE_MODE;
+
 	/// <summary>
 	/// Gets or sets the provider name, which must be either 'ollama' or 'openai'.
 	/// </summary>
@@ -42,14 +55,14 @@ public class Arguments
 	public required string PromptFile { get; set; }
 
 	/// <summary>
-	/// Gets or sets a value indicating whether to write code to the console. Defaults to true.
+	/// Gets or sets a value indicating whether to write the models response to the console. Defaults to true.
 	/// </summary>
-	public bool WriteCodeToConsole { get; set; } = true;
+	public bool WriteResponseToConsole { get; set; } = true;
 
 	/// <summary>
-	/// Gets or sets a value indicating whether to replace files in the source folder. Defaults to true.
+	/// Gets or sets the mode in which llmaid is operating, like only finding text or replacing it
 	/// </summary>
-	public bool ReplaceFiles { get; set; } = true;
+	public string Mode { get; set; } = REPLACEFILE_MODE;
 
 	/// <summary>
 	/// Gets or sets the temperature value for the model.
@@ -67,6 +80,10 @@ public class Arguments
 		var knownProvider = "ollama".Equals(Provider, StringComparison.OrdinalIgnoreCase) || "openai".Equals(Provider, StringComparison.OrdinalIgnoreCase);
 		if (!knownProvider)
 			throw new ArgumentException("Provider has to be 'ollama' or 'openai'.");
+
+		var knownMode = FIND_MODE.Equals(Mode, StringComparison.OrdinalIgnoreCase) || REPLACEFILE_MODE.Equals(Mode, StringComparison.OrdinalIgnoreCase);
+		if (!knownMode)
+			throw new ArgumentException("Mode has to be 'find' or 'replacefile'.");
 
 		if (FilePatterns?.Any() == false)
 			throw new ArgumentException("At least one file pattern must be defined.");
