@@ -1,8 +1,30 @@
 # Large Language Maid
 
-llmaid is a command-line tool designed to automate the process of AI supported file changes like code refactoring using large language models. It reads source code files, sends them to a Ollama or an OpenAI-compatible API, and writes back the models answers. The tool is highly configurable and supports every kind of text-based input file.
+llmaid is a command-line tool designed to automate the process of AI supported file changes using large language models. It reads source code files, sends them to a Ollama or an OpenAI-compatible API, and writes back the models answers. The tool is highly configurable and supports every kind of text-based input file.
+
+> [!NOTE]
+> 1. Paid services such as ChatGPT can cause high API costs if they are used with many files. Double check your jobs.
+> 2. You may get lower quality when using local models with [Ollama](https://ollama.com), but it's completely free and your files will never leave your computer.
 
 ![image](https://github.com/user-attachments/assets/015ba09b-4ce5-439f-a6af-4e20da6e511e)
+
+## What can it do?
+
+llmaid will run through every file in a path you specify and rewrite, analyse or summarize it. Pretty much everything you can come up with, as long as you can write a good system prompt.
+
+> [!NOTE]
+> The quality mainly depends on the model you want to use. ChatGPT works great, but I have also had good results with medium sized local models like `mistral-small:22b` and `qwen2.5:32b`.
+
+This repository provides a [few system prompts](/prompts), for example:
+
+### Documenting code
+With this prompt, llmaid will scan and rewrite each code file and generate missing summaries, fix typos, remove wrong comments and much more:
+
+![Code documenter](./docs/document%20code.png)
+
+### Finding unprofessional slang
+This prompt will output one json code block for each file. There it lists findings such as insults, cringe comments, and much more including a severity rating and a description what it thinks about the things it found:
+![Review files](./docs/review%20files.png)
 
 ## Prerequisites
 
