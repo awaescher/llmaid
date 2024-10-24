@@ -1,5 +1,5 @@
 using Microsoft.Extensions.AI;
-using OllamaSharp;
+using OllamaSharp.AsyncEnumerableExtensions;
 
 namespace llmaid.Streaming;
 

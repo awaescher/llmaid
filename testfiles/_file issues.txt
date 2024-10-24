@@ -1,3 +1,5 @@
+Code formatter:
+
 FileReader.cs
  - should change the class summary as it is wrong
  - should add a summary to the Path property with "Gets"
@@ -13,3 +15,20 @@ frmMain
  - should add summaries to the form
  - should TODO and empty argument summaries
  - methods are private, summaries are optional
+
+ Unprofessional content filter:
+
+ cache.php
+  - I freaking hate PHP (unrelated)
+
+ contract.sol
+  - f*ckface (insult)
+  - libido  (cringe comment trying to be funny)
+  - going home now (unprofessional comment)
+
+FileReader.cs
+  - Wurstblinker (cringe comment trying to be funny)
+
+JumpWidget
+ - pa55wood!123 (password)
+ - kurva (insult)

@@ -14,6 +14,7 @@ class Cache extends Command
      * The name and signature of the console command.
      *
      * @var string
+	 * I freaking hate PHP
      */
     public $signature = 'api:cache';
 
