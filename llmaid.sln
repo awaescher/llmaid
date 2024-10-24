@@ -20,7 +20,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "testfiles", "testfiles", "{
 		testfiles\Concurrency.swift = testfiles\Concurrency.swift
 		testfiles\contract.sol = testfiles\contract.sol
 		testfiles\FileReader.cs = testfiles\FileReader.cs
-		testfiles\files.txt = testfiles\files.txt
 		testfiles\frmMain.vb = testfiles\frmMain.vb
 		testfiles\JumpWidget.cpp = testfiles\JumpWidget.cpp
 		testfiles\register.go = testfiles\register.go
@@ -29,6 +28,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "testfiles", "testfiles", "{
 		testfiles\SystemInfo.cs = testfiles\SystemInfo.cs
 		testfiles\user.ts = testfiles\user.ts
 		testfiles\usermanager.py = testfiles\usermanager.py
+		testfiles\_file issues.txt = testfiles\_file issues.txt
 	EndProjectSection
 EndProject
 Global
@@ -48,10 +48,6 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
-	EndGlobalSection
-	GlobalSection(NestedProjects) = preSolution
-		{5F35E094-9928-4CFB-AD10-3FCBE3AAD90C} = {F523453E-E02F-4175-9C48-67710576DF38}
-		{F2CE75BE-33F5-40DC-968F-99091455BCF0} = {F523453E-E02F-4175-9C48-67710576DF38}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {20F727A5-80C1-42F1-B633-18919A24EDFC}

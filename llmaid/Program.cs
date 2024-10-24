@@ -2,10 +2,12 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using llmaid.Streaming;
+using OllamaSharp;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Serilog;
 using Spectre.Console;
+using OllamaSharp.Models;
 
 namespace llmaid;
 
@@ -94,14 +96,12 @@ internal static class Program
 			.Replace("%FILENAME%", Path.GetFileName(file));
 
 		var messages = new List<ChatMessage>
-			{
-				new() { Role = ChatRole.Assistant, Text = systemPrompt }
-			};
+		{
+			new() { Role = ChatRole.Assistant, Text = systemPrompt }
+		};
 
-		ChatOptions? options = null;
-
-		if (arguments.Temperature.HasValue)
-			options = new ChatOptions { Temperature = arguments.Temperature };
+		var options = new ChatOptions { Temperature = arguments.Temperature }
+			.AddOllamaOption(OllamaOption.NumCtx, originalCode.Length);
 
 		var generatedCodeBuilder = new StringBuilder();
 
@@ -124,7 +124,7 @@ internal static class Program
 
 					messages.Add(new ChatMessage { Role = ChatRole.User, Text = userPrompt });
 
-					response = await ChatClient.CompleteStreamingAsync(messages, options, cancellationToken).StreamToEnd(token =>
+					response = await ChatClient.CompleteStreamingAsync(messages, options, cancellationToken).StreamToEndAsync(token =>
 					{
 						if (waitTask.Value == 0)
 							waitTask.Increment(100);
