@@ -1,13 +1,13 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
-using llmaid.Streaming;
 using OllamaSharp;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Serilog;
 using Spectre.Console;
 using OllamaSharp.Models;
+using System.ClientModel;
 
 namespace llmaid;
 
@@ -164,9 +164,9 @@ internal static class Program
 	private static IChatClient CreateChatClient(Arguments arguments)
 	{
 		if (arguments.Provider.Equals("ollama", StringComparison.OrdinalIgnoreCase))
-			return new OllamaChatClient(arguments.Uri, arguments.Model);
+			return new OllamaApiClient(arguments.Uri, arguments.Model);
 		else
-			return new OpenAIChatClient(new OpenAI.OpenAIClient(arguments.ApiKey), arguments.Model);
+			return new OpenAIChatClient(new OpenAI.OpenAIClient(new ApiKeyCredential(arguments.ApiKey), new OpenAI.OpenAIClientOptions { Endpoint = arguments.Uri }), arguments.Model);
 	}
 
 	private static void WriteLine(string color, string message)
