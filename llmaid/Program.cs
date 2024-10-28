@@ -51,13 +51,19 @@ internal static class Program
 		var files = loader.GetAll(arguments.SourcePath, arguments.FilePatterns);
 		FileCount = files.Length;
 
+		var errors = 0;
 		foreach (var file in files)
-			await ProcessFile(file, systemPromptTemplate, arguments, cancellationToken);
+		{
+			var success = await ProcessFile(file, systemPromptTemplate, arguments, cancellationToken);
+			if (!success)
+				errors++;
+		}
 
 		Information("Finished in " + totalStopWatch.Elapsed.ToString());
+		Information($"{errors} error{(errors == 1 ? "" : "s")} occured.");
 	}
 
-	private static async Task ProcessFile(string file, string systemPromptTemplate, Arguments arguments, CancellationToken cancellationToken)
+	private static async Task<bool> ProcessFile(string file, string systemPromptTemplate, Arguments arguments, CancellationToken cancellationToken)
 	{
 		string originalCode = string.Empty;
 
@@ -68,13 +74,13 @@ internal static class Program
 		catch (Exception ex)
 		{
 			Error($"Could not read {file}: {ex.Message}");
-			return;
+			return false;
 		}
 
 		if (originalCode.Length < 1)
 		{
 			Warning($"Skipped file {file}: No content.");
-			return;
+			return false;
 		}
 
 		Information($"[{++CurrentFileIndex}/{FileCount}] {file} ({originalCode.Length} char{(originalCode.Length == 1 ? "" : "s")})");
@@ -129,7 +135,7 @@ internal static class Program
 						if (waitTask.Value == 0)
 							waitTask.Increment(100);
 
-						generatedCodeBuilder.Append(token.Text);
+						generatedCodeBuilder.Append(token?.Text ?? "");
 						receiveTask.Value = CalculateProgress(generatedCodeBuilder.Length, originalCode.Length * 1.20);  // fake the estimated length, the LLM is going to extend the class
 					}).ConfigureAwait(false);
 
@@ -150,15 +156,21 @@ internal static class Program
 			var extractedCode = CodeBlockExtractor.Extract(response?.Text ?? "");
 			var couldExtractCode = !string.IsNullOrWhiteSpace(extractedCode);
 			if (couldExtractCode)
+			{
 				await File.WriteAllTextAsync(file, extractedCode, cancellationToken);
+			}
 			else
+			{
 				Error("Could not extract code from the model's response. It seems that there's no valid code block.");
+				return false;
+			}
 		}
 
 		if (arguments.IsFindMode && !arguments.WriteResponseToConsole)
 			Code(response?.Text ?? "");
 
 		Detail($"{stopwatch.Elapsed}{Environment.NewLine}");
+		return true;
 	}
 
 	private static IChatClient CreateChatClient(Arguments arguments)
