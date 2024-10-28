@@ -11,6 +11,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "prompts", "prompts", "{5F35
 	ProjectSection(SolutionItems) = preProject
 		prompts\code documenter.txt = prompts\code documenter.txt
 		prompts\unprofessional content filter.txt = prompts\unprofessional content filter.txt
+		prompts\nda checker.txt = prompts\nda checker.txt
 		prompts\wiki proofreader.txt = prompts\wiki proofreader.txt
 	EndProjectSection
 EndProject
