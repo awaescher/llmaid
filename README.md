@@ -53,6 +53,7 @@ Change the `appsettings.json` file in the root directory to your needs:
   "Uri": "https://localhost:11434",            // Ollama or OpenAI (compatible) endpoints like http://localhost:11434 or https://api.openai.com
   "ApiKey": ""                                 // not required for Ollama
   "Model": "deepseek-coder-v2:16b",            // the model to use
+  "Mode": "replacefile",                       // "replacefile" tries to rewrite files while "find" just writes console outputs - both depending on the system prompt
   "PromptFile": "./systemprompt.txt",          // the system prompt to prime the model
   "SourcePath": "./testcode",                  // the path to look for files to change
   "FilePatterns": [ "*.cs", "*.js" ],          // the file types to change
