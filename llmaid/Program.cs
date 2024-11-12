@@ -85,9 +85,11 @@ internal static class Program
 
 		Information($"[{++CurrentFileIndex}/{FileCount}] {file} ({originalCode.Length} char{(originalCode.Length == 1 ? "" : "s")})");
 
+		var codeLanguage = GetCodeLanguageByFileExtension(Path.GetExtension(file));
+
 		var systemPrompt = systemPromptTemplate
 			.Replace("%CODE%", originalCode)
-			.Replace("%CODELANGUAGE%", GetCodeLanguageByFileExtension(Path.GetExtension(file)))
+			.Replace("%CODELANGUAGE%", codeLanguage)
 			.Replace("%FILENAME%", Path.GetFileName(file));
 
 		var userPrompt = """
@@ -98,7 +100,7 @@ internal static class Program
 """;
 		userPrompt = userPrompt
 			.Replace("%CODE%", originalCode)
-			.Replace("%CODELANGUAGE%", GetCodeLanguageByFileExtension(Path.GetExtension(file)))
+			.Replace("%CODELANGUAGE%", codeLanguage)
 			.Replace("%FILENAME%", Path.GetFileName(file));
 
 		var messages = new List<ChatMessage>
