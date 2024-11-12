@@ -65,6 +65,12 @@ public class Arguments
 	public string Mode { get; set; } = REPLACEFILE_MODE;
 
 	/// <summary>
+	/// Gets or sets the string that should be used to start the assistant's message.
+	/// CAn be used to make the model think it started with the a code block already to prevent it from talking about it
+	/// </summary>
+	public string AssistantStarter { get; set; } = string.Empty;
+
+	/// <summary>
 	/// Gets or sets the temperature value for the model.
 	/// </summary>
 	public float? Temperature { get; set; }

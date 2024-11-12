@@ -132,6 +132,10 @@ internal static class Program
 
 					messages.Add(new ChatMessage { Role = ChatRole.User, Text = userPrompt });
 
+					var hasAssistantStarter = !string.IsNullOrWhiteSpace(arguments.AssistantStarter);
+					if (hasAssistantStarter)
+						messages.Add(new ChatMessage { Role = ChatRole.Assistant, Text = arguments.AssistantStarter });
+
 					response = await ChatClient.CompleteStreamingAsync(messages, options, cancellationToken).StreamToEndAsync(token =>
 					{
 						if (waitTask.Value == 0)
@@ -140,6 +144,9 @@ internal static class Program
 						generatedCodeBuilder.Append(token?.Text ?? "");
 						receiveTask.Value = CalculateProgress(generatedCodeBuilder.Length, originalCode.Length * 1.20);  // fake the estimated length, the LLM is going to extend the class
 					}).ConfigureAwait(false);
+
+					if (hasAssistantStarter && response != null)
+						response.Text = arguments.AssistantStarter + response.Text;
 
 					receiveTask.Value = 100;
 				}
