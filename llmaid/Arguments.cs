@@ -45,9 +45,9 @@ public class Arguments
 	public required string SourcePath { get; set; }
 
 	/// <summary>
-	/// Gets or sets the file patterns to search for.
+	/// Gets or sets the file glob patterns to search for.
 	/// </summary>
-	public string[] FilePatterns { get; set; } = [];
+	public Files Files { get; set; } = new([], []);
 
 	/// <summary>
 	/// Gets or sets the path to the file defining the system prompt.
@@ -91,7 +91,7 @@ public class Arguments
 		if (!knownMode)
 			throw new ArgumentException("Mode has to be 'find' or 'replacefile'.");
 
-		if (FilePatterns?.Any() == false)
+		if (Files.Include?.Any() == false)
 			throw new ArgumentException("At least one file pattern must be defined.");
 
 		if (string.IsNullOrEmpty(SourcePath))

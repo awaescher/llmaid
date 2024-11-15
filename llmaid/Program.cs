@@ -48,7 +48,7 @@ internal static class Program
 		var totalStopWatch = Stopwatch.StartNew();
 
 		Information($"Locating all files ..." + Environment.NewLine);
-		var files = loader.GetAll(arguments.SourcePath, arguments.FilePatterns);
+		var files = loader.GetAll(arguments.SourcePath, arguments.Files);
 		FileCount = files.Length;
 
 		var errors = 0;

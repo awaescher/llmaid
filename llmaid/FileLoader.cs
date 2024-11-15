@@ -1,28 +1,39 @@
+using GlobExpressions;
+
 namespace llmaid;
 
 public class FileLoader : IFileLoader
 {
-	public string[] GetAll(string path, string[] searchPatterns)
+	public string[] GetAll(string path, Files files)
 	{
-		return Get(path, searchPatterns)
+		return Get(path, files)
 			.Distinct()
 			.Order()
 			.ToArray();
 	}
 
-	public IEnumerable<string> Get(string path, string[] searchPatterns)
+	public IEnumerable<string> Get(string path, Files files)
 	{
-		foreach (var pattern in searchPatterns)
+		var ignore = new Ignore.Ignore();
+		ignore.Add(files.Exclude.Select(Normalize));
+
+		foreach (var pattern in files.Include)
 		{
-			foreach (var entry in Directory.GetFileSystemEntries(path, pattern, SearchOption.AllDirectories))
+			foreach (var entry in Glob.Files(path, pattern))
 			{
-				yield return entry;
+				var isExcluded = ignore.IsIgnored(Normalize(entry));
+				if (!isExcluded)
+					yield return entry;
 			}
 		}
 	}
+
+	private string Normalize(string file) => file.Replace('\\', '/');
 }
 
 public interface IFileLoader
 {
-	IEnumerable<string> Get(string path, string[] searchPatterns);
+	IEnumerable<string> Get(string path, Files files);
 }
+
+public record Files(string[] Include, string[] Exclude);
