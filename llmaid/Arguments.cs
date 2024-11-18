@@ -7,6 +7,7 @@ public class Arguments
 {
 	private const string FIND_MODE = "find";
 	private const string REPLACEFILE_MODE = "replacefile";
+	private string _assistantStarter = string.Empty;
 
 	/// <summary>
 	/// Gets whether llmaid is in find mode, where file contents are not changed
@@ -66,14 +67,23 @@ public class Arguments
 
 	/// <summary>
 	/// Gets or sets the string that should be used to start the assistant's message.
-	/// CAn be used to make the model think it started with the a code block already to prevent it from talking about it
+	/// Can be used to make the model think it started with the a code block already to prevent it from talking about it.
 	/// </summary>
-	public string AssistantStarter { get; set; } = string.Empty;
+	public string AssistantStarter
+	{
+		get => _assistantStarter?.Replace("\\n", Environment.NewLine) ?? "";
+		set => _assistantStarter = value;
+	}
 
 	/// <summary>
 	/// Gets or sets the temperature value for the model.
 	/// </summary>
 	public float? Temperature { get; set; }
+
+	/// <summary>
+	/// Gets or sets the maximum number of retries of a reponse could not be processed
+	/// </summary>
+	public int MaxRetries { get; set; } = 0;
 
 	/// <summary>
 	/// Validates the current arguments, ensuring all required fields are properly set.

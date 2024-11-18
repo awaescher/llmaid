@@ -54,7 +54,28 @@ internal static class Program
 		var errors = 0;
 		foreach (var file in files)
 		{
-			var success = await ProcessFile(file, systemPromptTemplate, arguments, cancellationToken);
+			Information($"[{++CurrentFileIndex}/{FileCount}] {file} ({GetFileSizeString(file)})");
+
+			var success = false;
+			var attempt = 0;
+			do
+			{
+				attempt++;
+				if (attempt > 1)
+					Detail("Attempt " + attempt);
+				var stopwatch = Stopwatch.StartNew();
+				try
+				{
+					var retryMessage = attempt > 1 ? $"This is the {attempt}. attempt to process this file, all prior attempts failed because your response could not be processed. Please follow the instructions more closely." : "";
+					success = await ProcessFile(file, systemPromptTemplate, retryMessage, arguments, cancellationToken);
+				}
+				finally
+				{
+					stopwatch.Stop();
+					Detail($"{stopwatch.Elapsed}{Environment.NewLine}");
+				}
+			} while (!success && attempt < arguments.MaxRetries);
+
 			if (!success)
 				errors++;
 		}
@@ -63,7 +84,19 @@ internal static class Program
 		Information($"{errors} error{(errors == 1 ? "" : "s")} occured.");
 	}
 
-	private static async Task<bool> ProcessFile(string file, string systemPromptTemplate, Arguments arguments, CancellationToken cancellationToken)
+	private static object GetFileSizeString(string file)
+	{
+		try
+		{
+			return $"{new FileInfo(file).Length / 1024} kB";
+		}
+		catch
+		{
+			return "??? kB";
+		}
+	}
+
+	private static async Task<bool> ProcessFile(string file, string systemPromptTemplate, string retryMessage, Arguments arguments, CancellationToken cancellationToken)
 	{
 		string originalCode = string.Empty;
 
@@ -82,8 +115,6 @@ internal static class Program
 			Warning($"Skipped file {file}: No content.");
 			return false;
 		}
-
-		Information($"[{++CurrentFileIndex}/{FileCount}] {file} ({originalCode.Length} char{(originalCode.Length == 1 ? "" : "s")})");
 
 		var codeLanguage = GetCodeLanguageByFileExtension(Path.GetExtension(file));
 
@@ -105,7 +136,7 @@ internal static class Program
 
 		var messages = new List<ChatMessage>
 		{
-			new() { Role = ChatRole.Assistant, Text = systemPrompt }
+			new() { Role = ChatRole.System, Text = systemPrompt }
 		};
 
 		var options = new ChatOptions { Temperature = arguments.Temperature }
@@ -114,8 +145,6 @@ internal static class Program
 		var generatedCodeBuilder = new StringBuilder();
 
 		StreamingChatCompletionUpdate? response = null;
-
-		var stopwatch = Stopwatch.StartNew();
 
 		await AnsiConsole.Progress()
 			.AutoClear(true)
@@ -131,6 +160,9 @@ internal static class Program
 					sendTask.Increment(100);
 
 					messages.Add(new ChatMessage { Role = ChatRole.User, Text = userPrompt });
+
+					if (!string.IsNullOrEmpty(retryMessage))
+						messages.Add(new ChatMessage { Role = ChatRole.User, Text = retryMessage });
 
 					var hasAssistantStarter = !string.IsNullOrWhiteSpace(arguments.AssistantStarter);
 					if (hasAssistantStarter)
@@ -151,8 +183,6 @@ internal static class Program
 					receiveTask.Value = 100;
 				}
 			});
-
-		stopwatch.Stop();
 
 		if (arguments.WriteResponseToConsole)
 		{
@@ -178,7 +208,6 @@ internal static class Program
 		if (arguments.IsFindMode && !arguments.WriteResponseToConsole)
 			Code(response?.Text ?? "");
 
-		Detail($"{stopwatch.Elapsed}{Environment.NewLine}");
 		return true;
 	}
 
