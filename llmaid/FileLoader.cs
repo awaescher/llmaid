@@ -19,7 +19,7 @@ public class FileLoader : IFileLoader
 
 		foreach (var pattern in files.Include)
 		{
-			foreach (var entry in Glob.Files(path, pattern))
+			foreach (var entry in Glob.Files(path, pattern).Select(f => Path.Combine(path, f)))
 			{
 				var isExcluded = ignore.IsIgnored(Normalize(entry));
 				if (!isExcluded)
