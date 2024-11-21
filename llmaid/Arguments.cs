@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace llmaid;
 
 /// <summary>
@@ -22,28 +24,28 @@ public class Arguments
 	/// <summary>
 	/// Gets or sets the provider name, which must be either 'ollama' or 'openai'.
 	/// </summary>
-	public required string Provider { get; set; }
+	public string Provider { get; set; }
 
 	/// <summary>
 	/// Gets or sets the API key used for authentication with the provider.
 	/// Not required for Ollama.
 	/// </summary>
-	public required string ApiKey { get; set; }
+	public string ApiKey { get; set; }
 
 	/// <summary>
 	/// Gets or sets the URI endpoint for the API.
 	/// </summary>
-	public required Uri Uri { get; set; }
+	public Uri Uri { get; set; }
 
 	/// <summary>
 	/// Gets or sets the model name to be used.
 	/// </summary>
-	public required string Model { get; set; }
+	public string Model { get; set; }
 
 	/// <summary>
 	/// Gets or sets the source path where files are located that should be processed.
 	/// </summary>
-	public required string SourcePath { get; set; }
+	public string TargetPath { get; set; }
 
 	/// <summary>
 	/// Gets or sets the file glob patterns to search for.
@@ -53,7 +55,7 @@ public class Arguments
 	/// <summary>
 	/// Gets or sets the path to the file defining the system prompt.
 	/// </summary>
-	public required string PromptFile { get; set; }
+	public string DefinitionFile { get; set; }
 
 	/// <summary>
 	/// Gets or sets a value indicating whether to write the models response to the console. Defaults to true.
@@ -81,15 +83,22 @@ public class Arguments
 	public float? Temperature { get; set; }
 
 	/// <summary>
+	/// Gets or sets the system prompt to be used with the model
+	/// </summary>
+	public string SystemPrompt { get; set; } = string.Empty;
+
+	/// <summary>
 	/// Gets or sets the maximum number of retries of a reponse could not be processed
 	/// </summary>
-	public int MaxRetries { get; set; } = 0;
+	public int MaxRetries { get; set; }
 
 	/// <summary>
 	/// Validates the current arguments, ensuring all required fields are properly set.
 	/// </summary>
-	public void Validate()
+	public async Task Validate()
 	{
+		await OverrideArgumentsFromDefinition();
+
 		if (string.IsNullOrEmpty(Uri?.AbsolutePath))
 			throw new ArgumentException("Uri has to be defined.");
 
@@ -104,13 +113,41 @@ public class Arguments
 		if (Files.Include?.Any() == false)
 			throw new ArgumentException("At least one file pattern must be defined.");
 
-		if (string.IsNullOrEmpty(SourcePath))
-			throw new ArgumentException("Source path has to be defined.");
+		if (string.IsNullOrEmpty(TargetPath))
+			throw new ArgumentException("Target path has to be defined.");
 
 		if (string.IsNullOrEmpty(Model))
 			throw new ArgumentException("Model has to be defined.");
 
-		if (string.IsNullOrWhiteSpace(PromptFile) || !File.Exists(PromptFile))
-			throw new FileNotFoundException($"Prompt file '{PromptFile}' does not exist.");
+		if (string.IsNullOrWhiteSpace(DefinitionFile) || !File.Exists(DefinitionFile))
+			throw new FileNotFoundException($"Prompt file '{DefinitionFile}' does not exist.");
+	}
+
+	private async Task OverrideArgumentsFromDefinition()
+	{
+		const string XML_TAG = "OverrideSettings";
+
+		// keep a local variable as the SystemPrompt might get overridden in UpdateExistingArguments()
+		var systemPrompt = await File.ReadAllTextAsync(DefinitionFile).ConfigureAwait(false);
+		SystemPrompt = systemPrompt;
+
+		var codeBlock = CodeBlockExtractor.Extract(SystemPrompt, XML_TAG);
+		if (codeBlock.Trim().Any())
+		{
+			// overwrite settings
+			UpdateExistingArguments(JsonSerializer.Deserialize<Arguments>(codeBlock, new JsonSerializerOptions { ReadCommentHandling = JsonCommentHandling.Skip }));
+
+			SystemPrompt = systemPrompt.Split($"</{XML_TAG}>").Skip(1).Take(1).Single().TrimStart();
+		}
+	}
+
+	private void UpdateExistingArguments(Arguments newArguments)
+	{
+		foreach (var property in typeof(Arguments).GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
+		{
+			var newValue = property.GetValue(newArguments);
+			if (newValue != null && property.CanWrite)
+				property.SetValue(this, newValue);
+		}
 	}
 }

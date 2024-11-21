@@ -22,6 +22,21 @@ internal static class Program
 		using var cancellationTokenSource = new CancellationTokenSource();
 		var cancellationToken = cancellationTokenSource.Token;
 
+		if (args.Length != 2)
+			throw new ArgumentException("llmaid requires two arguments: the definition file and a target path.");
+
+		var definitionFile = args[0];
+		if (string.IsNullOrEmpty(definitionFile))
+			throw new ArgumentException("Missing definition file");
+		if (!File.Exists(definitionFile))
+			throw new ArgumentException("Definition file does not exist");
+
+		var targetPath = args[1];
+		if (string.IsNullOrEmpty(targetPath))
+			throw new ArgumentException("Missing target path");
+		if (!Directory.Exists(targetPath))
+			throw new ArgumentException("Target path does not exist");
+
 		var config = new ConfigurationBuilder()
 			.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
 			.AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production"}.json", optional: true)
@@ -34,21 +49,20 @@ internal static class Program
 			.CreateLogger();
 
 		var arguments = config.Get<Arguments>() ?? throw new ArgumentException("Arguments could not be parsed.");
-		arguments.Validate();
-
-		var systemPromptTemplate = await File.ReadAllTextAsync(arguments.PromptFile, cancellationToken);
+		arguments.DefinitionFile = definitionFile;
+		arguments.TargetPath = targetPath;
+		await arguments.Validate();
 
 		ChatClient = CreateChatClient(arguments);
 
-		Information($"Running {arguments.Model} ({arguments.Uri}) against {arguments.SourcePath}." + Environment.NewLine);
+		Information($"Running {arguments.Model} ({arguments.Uri}) against {arguments.TargetPath}." + Environment.NewLine);
 		Log.Debug(JsonSerializer.Serialize(arguments, new JsonSerializerOptions { WriteIndented = true }));
-		Log.Debug(systemPromptTemplate);
 
 		var loader = new FileLoader();
 		var totalStopWatch = Stopwatch.StartNew();
 
-		Information($"Locating all files ..." + Environment.NewLine);
-		var files = loader.GetAll(arguments.SourcePath, arguments.Files);
+		Information("Locating all files ..." + Environment.NewLine);
+		var files = loader.GetAll(arguments.TargetPath, arguments.Files);
 		FileCount = files.Length;
 
 		var errors = 0;
@@ -67,7 +81,7 @@ internal static class Program
 				try
 				{
 					var retryMessage = attempt > 1 ? $"This is the {attempt}. attempt to process this file, all prior attempts failed because your response could not be processed. Please follow the instructions more closely." : "";
-					success = await ProcessFile(file, systemPromptTemplate, retryMessage, arguments, cancellationToken);
+					success = await ProcessFile(file, arguments.SystemPrompt, retryMessage, arguments, cancellationToken);
 				}
 				finally
 				{
@@ -88,7 +102,7 @@ internal static class Program
 	{
 		try
 		{
-			return $"{new FileInfo(file).Length / 1024} kB";
+			return $"{new FileInfo(file).Length / 1024.0:0.#} kB";
 		}
 		catch
 		{
@@ -139,8 +153,12 @@ internal static class Program
 			new() { Role = ChatRole.System, Text = systemPrompt }
 		};
 
+		var estimatedContextLength = (int)((systemPrompt.Length + originalCode.Length) / 3.5);
 		var options = new ChatOptions { Temperature = arguments.Temperature }
-			.AddOllamaOption(OllamaOption.NumCtx, originalCode.Length);
+			.AddOllamaOption(OllamaOption.NumCtx, estimatedContextLength);
+
+		Log.Logger.Debug($"Estimated context length for system prompt ({systemPrompt.Length} chars) and code ({originalCode.Length} chars): {estimatedContextLength}");
+		Information($"Estimated context length for system prompt ({systemPrompt.Length} chars) and code ({originalCode.Length} chars): {estimatedContextLength}");
 
 		var generatedCodeBuilder = new StringBuilder();
 
