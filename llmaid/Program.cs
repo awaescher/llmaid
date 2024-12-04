@@ -13,6 +13,8 @@ namespace llmaid;
 
 internal static class Program
 {
+	const float ESTIMATED_CODE_LENGTH_INCREASE_FACTOR = 1.25f; // fake the estimated length, the LLM is going to extend the class
+
 	internal static IChatClient ChatClient { get; set; } = null!;
 	internal static int FileCount { get; set; }
 	internal static int CurrentFileIndex { get; set; }
@@ -153,7 +155,8 @@ internal static class Program
 			new() { Role = ChatRole.System, Text = systemPrompt }
 		};
 
-		var estimatedContextLength = (int)((systemPrompt.Length + originalCode.Length) / 3.5);
+		var estimatedResponseLength = originalCode.Length * ESTIMATED_CODE_LENGTH_INCREASE_FACTOR;
+		var estimatedContextLength = (int)((systemPrompt.Length + originalCode.Length + estimatedResponseLength) / 3);
 		var options = new ChatOptions { Temperature = arguments.Temperature }
 			.AddOllamaOption(OllamaOption.NumCtx, estimatedContextLength);
 
@@ -192,7 +195,7 @@ internal static class Program
 							waitTask.Increment(100);
 
 						generatedCodeBuilder.Append(token?.Text ?? "");
-						receiveTask.Value = CalculateProgress(generatedCodeBuilder.Length, originalCode.Length * 1.20);  // fake the estimated length, the LLM is going to extend the class
+						receiveTask.Value = CalculateProgress(generatedCodeBuilder.Length, estimatedResponseLength);
 					}).ConfigureAwait(false);
 
 					if (hasAssistantStarter && response != null)

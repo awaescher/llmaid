@@ -2,7 +2,8 @@
 {
 	"Temperature": 0.5,
 	"Mode": "replacefile", // find or replacefile
-	"AssistantStarter": "Sure, here is the entire file rewritten in a single markdown code block:\n\n``` ", // used to make the model think it started with the file contents already to prevent the llm from talking about the code
+	"Model": "qwen2.5-coder:32b",
+	"AssistantStarter": "", // used to make the model think it started with the file contents already to prevent the llm from talking about the code
 	"MaxRetries":  1,
 	"Files": {
 		"Include": [ 
