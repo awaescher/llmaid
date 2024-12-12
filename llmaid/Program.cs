@@ -219,6 +219,13 @@ internal static class Program
 			}
 			else
 			{
+				var wasOkay = (response?.Text ?? "").Trim().EndsWith("[OK]", StringComparison.OrdinalIgnoreCase);
+				if (wasOkay)
+				{
+					Information("The model returned 'OK' signaling that no changes were required.");
+					return true;
+				}
+
 				Error("Could not extract code from the model's response. It seems that there's no valid code block.");
 				return false;
 			}
