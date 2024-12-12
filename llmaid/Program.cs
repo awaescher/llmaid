@@ -13,8 +13,6 @@ namespace llmaid;
 
 internal static class Program
 {
-	const float ESTIMATED_CODE_LENGTH_INCREASE_FACTOR = 1.25f; // fake the estimated length, the LLM is going to extend the class
-
 	internal static IChatClient ChatClient { get; set; } = null!;
 	internal static int FileCount { get; set; }
 	internal static int CurrentFileIndex { get; set; }
@@ -155,13 +153,13 @@ internal static class Program
 			new() { Role = ChatRole.System, Text = systemPrompt }
 		};
 
-		var estimatedResponseLength = originalCode.Length * ESTIMATED_CODE_LENGTH_INCREASE_FACTOR;
+		var estimatedResponseLength = ResponseEstimator.EstimateResponseTokens(arguments, originalCode);
 		var estimatedContextLength = (int)((systemPrompt.Length + originalCode.Length + estimatedResponseLength) / 3);
 		var options = new ChatOptions { Temperature = arguments.Temperature }
 			.AddOllamaOption(OllamaOption.NumCtx, estimatedContextLength);
 
-		Log.Logger.Debug($"Estimated context length for system prompt ({systemPrompt.Length} chars) and code ({originalCode.Length} chars): {estimatedContextLength}");
-		Information($"Estimated context length for system prompt ({systemPrompt.Length} chars) and code ({originalCode.Length} chars): {estimatedContextLength}");
+		Log.Logger.Debug($"Estimated context length for system prompt ({systemPrompt.Length} chars) and code ({originalCode.Length} chars): {estimatedContextLength} tokens");
+		Information($"Estimated context length for system prompt ({systemPrompt.Length} chars) and code ({originalCode.Length} chars): {estimatedContextLength} tokens");
 
 		var generatedCodeBuilder = new StringBuilder();
 
@@ -339,5 +337,21 @@ internal static class Program
 			".v" => "verilog",
 			_ => ""
 		};
+	}
+
+	internal class ResponseEstimator
+	{
+		public static float EstimateResponseTokens(Arguments arguments, string code)
+		{
+			var inputLength = arguments.SystemPrompt.Length + code.Length;
+
+			if (arguments.IsReplaceMode)
+				return (int)((inputLength + 1.25f * code.Length) / 3);  // fake the estimated length, the LLM is going to extend the class
+
+			if (arguments.IsFindMode)
+				return (int)((inputLength + 0.25f * code.Length) / 3);
+
+			throw new NotSupportedException();
+		}
 	}
 }
