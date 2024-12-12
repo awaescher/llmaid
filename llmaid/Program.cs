@@ -239,10 +239,12 @@ internal static class Program
 
 	private static IChatClient CreateChatClient(Arguments arguments)
 	{
+		var timeout = TimeSpan.FromMinutes(15);
+
 		if (arguments.Provider.Equals("ollama", StringComparison.OrdinalIgnoreCase))
-			return new OllamaApiClient(arguments.Uri, arguments.Model);
+			return new OllamaApiClient(new HttpClient { BaseAddress = arguments.Uri, Timeout = timeout }, arguments.Model);
 		else
-			return new OpenAIChatClient(new OpenAI.OpenAIClient(new ApiKeyCredential(arguments.ApiKey), new OpenAI.OpenAIClientOptions { Endpoint = arguments.Uri }), arguments.Model);
+			return new OpenAIChatClient(new OpenAI.OpenAIClient(new ApiKeyCredential(arguments.ApiKey), new OpenAI.OpenAIClientOptions { Endpoint = arguments.Uri, NetworkTimeout = timeout }), arguments.Model);
 	}
 
 	private static void WriteLine(string color, string message)
