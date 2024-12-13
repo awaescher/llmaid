@@ -29,13 +29,13 @@ internal static class Program
 		if (string.IsNullOrEmpty(definitionFile))
 			throw new ArgumentException("Missing definition file");
 		if (!File.Exists(definitionFile))
-			throw new ArgumentException("Definition file does not exist");
+			throw new ArgumentException("Definition file does not exist:" + definitionFile);
 
 		var targetPath = args[1];
 		if (string.IsNullOrEmpty(targetPath))
 			throw new ArgumentException("Missing target path");
 		if (!Directory.Exists(targetPath))
-			throw new ArgumentException("Target path does not exist");
+			throw new ArgumentException("Target path does not exist: " + targetPath);
 
 		var config = new ConfigurationBuilder()
 			.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
