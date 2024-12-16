@@ -1,15 +1,17 @@
-using System.Text.Json;
-
 namespace llmaid;
 
 /// <summary>
-/// Represents the arguments required for configuring the application.
+/// Represents the settings required for configuring the application.
 /// </summary>
-public class Arguments
+public class Settings
 {
 	private const string FIND_MODE = "find";
 	private const string REPLACEFILE_MODE = "replacefile";
-	private string _assistantStarter = string.Empty;
+	private string? _assistantStarter;
+
+	public static Settings Empty => new();
+
+	public bool IsEmpty => string.IsNullOrWhiteSpace(Provider);
 
 	/// <summary>
 	/// Gets whether llmaid is in find mode, where file contents are not changed
@@ -24,56 +26,56 @@ public class Arguments
 	/// <summary>
 	/// Gets or sets the provider name, which must be either 'ollama' or 'openai'.
 	/// </summary>
-	public string Provider { get; set; }
+	public string? Provider { get; set; }
 
 	/// <summary>
 	/// Gets or sets the API key used for authentication with the provider.
 	/// Not required for Ollama.
 	/// </summary>
-	public string ApiKey { get; set; }
+	public string? ApiKey { get; set; }
 
 	/// <summary>
 	/// Gets or sets the URI endpoint for the API.
 	/// </summary>
-	public Uri Uri { get; set; }
+	public Uri? Uri { get; set; }
 
 	/// <summary>
 	/// Gets or sets the model name to be used.
 	/// </summary>
-	public string Model { get; set; }
+	public string? Model { get; set; }
 
 	/// <summary>
 	/// Gets or sets the source path where files are located that should be processed.
 	/// </summary>
-	public string TargetPath { get; set; }
+	public string? TargetPath { get; set; }
 
 	/// <summary>
 	/// Gets or sets the file glob patterns to search for.
 	/// </summary>
-	public Files Files { get; set; } = new([], []);
+	public Files? Files { get; set; }
 
 	/// <summary>
 	/// Gets or sets the path to the file defining the system prompt.
 	/// </summary>
-	public string DefinitionFile { get; set; }
+	public string? DefinitionFile { get; set; }
 
 	/// <summary>
 	/// Gets or sets a value indicating whether to write the models response to the console. Defaults to true.
 	/// </summary>
-	public bool WriteResponseToConsole { get; set; } = true;
+	public bool? WriteResponseToConsole { get; set; } = true;
 
 	/// <summary>
 	/// Gets or sets the mode in which llmaid is operating, like only finding text or replacing it
 	/// </summary>
-	public string Mode { get; set; } = REPLACEFILE_MODE;
+	public string? Mode { get; set; }
 
 	/// <summary>
 	/// Gets or sets the string that should be used to start the assistant's message.
 	/// Can be used to make the model think it started with the a code block already to prevent it from talking about it.
 	/// </summary>
-	public string AssistantStarter
+	public string? AssistantStarter
 	{
-		get => _assistantStarter?.Replace("\\n", Environment.NewLine) ?? "";
+		get => _assistantStarter?.Replace("\\n", Environment.NewLine);
 		set => _assistantStarter = value;
 	}
 
@@ -85,20 +87,18 @@ public class Arguments
 	/// <summary>
 	/// Gets or sets the system prompt to be used with the model
 	/// </summary>
-	public string SystemPrompt { get; set; } = string.Empty;
+	public string? SystemPrompt { get; set; }
 
 	/// <summary>
 	/// Gets or sets the maximum number of retries of a reponse could not be processed
 	/// </summary>
-	public int MaxRetries { get; set; }
+	public int? MaxRetries { get; set; }
 
 	/// <summary>
 	/// Validates the current arguments, ensuring all required fields are properly set.
 	/// </summary>
-	public async Task Validate()
+	public Task Validate()
 	{
-		await OverrideArgumentsFromDefinition();
-
 		if (string.IsNullOrEmpty(Uri?.AbsolutePath))
 			throw new ArgumentException("Uri has to be defined.");
 
@@ -110,7 +110,7 @@ public class Arguments
 		if (!knownMode)
 			throw new ArgumentException("Mode has to be 'find' or 'replacefile'.");
 
-		if (Files.Include?.Any() == false)
+		if ((Files ?? new Files([], [])).Include?.Any() == false)
 			throw new ArgumentException("At least one file pattern must be defined.");
 
 		if (string.IsNullOrEmpty(TargetPath))
@@ -121,31 +121,15 @@ public class Arguments
 
 		if (string.IsNullOrWhiteSpace(DefinitionFile) || !File.Exists(DefinitionFile))
 			throw new FileNotFoundException($"Prompt file '{DefinitionFile}' does not exist.");
+
+		return Task.CompletedTask;
 	}
 
-	private async Task OverrideArgumentsFromDefinition()
+	public void OverrideWith(Settings newSettings)
 	{
-		const string XML_TAG = "OverrideSettings";
-
-		// keep a local variable as the SystemPrompt might get overridden in UpdateExistingArguments()
-		var systemPrompt = await File.ReadAllTextAsync(DefinitionFile).ConfigureAwait(false);
-		SystemPrompt = systemPrompt;
-
-		var codeBlock = CodeBlockExtractor.Extract(SystemPrompt, XML_TAG);
-		if (codeBlock.Trim().Any())
+		foreach (var property in typeof(Settings).GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
 		{
-			// overwrite settings
-			UpdateExistingArguments(JsonSerializer.Deserialize<Arguments>(codeBlock, new JsonSerializerOptions { ReadCommentHandling = JsonCommentHandling.Skip }));
-
-			SystemPrompt = systemPrompt.Split($"</{XML_TAG}>").Skip(1).Take(1).Single().TrimStart();
-		}
-	}
-
-	private void UpdateExistingArguments(Arguments newArguments)
-	{
-		foreach (var property in typeof(Arguments).GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
-		{
-			var newValue = property.GetValue(newArguments);
+			var newValue = property.GetValue(newSettings);
 			if (newValue != null && property.CanWrite)
 				property.SetValue(this, newValue);
 		}

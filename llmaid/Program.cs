@@ -8,6 +8,7 @@ using Serilog;
 using Spectre.Console;
 using OllamaSharp.Models;
 using System.ClientModel;
+using System.CommandLine;
 
 namespace llmaid;
 
@@ -21,48 +22,37 @@ internal static class Program
 	{
 		using var cancellationTokenSource = new CancellationTokenSource();
 		var cancellationToken = cancellationTokenSource.Token;
-
-		if (args.Length != 2)
-			throw new ArgumentException("llmaid requires two arguments: the definition file and a target path.");
-
-		var definitionFile = args[0];
-		if (string.IsNullOrEmpty(definitionFile))
-			throw new ArgumentException("Missing definition file");
-		if (!File.Exists(definitionFile))
-			throw new ArgumentException("Definition file does not exist:" + definitionFile);
-
-		var targetPath = args[1];
-		if (string.IsNullOrEmpty(targetPath))
-			throw new ArgumentException("Missing target path");
-		if (!Directory.Exists(targetPath))
-			throw new ArgumentException("Target path does not exist: " + targetPath);
-
+		
+		// settings 1: appsettings.json
 		var config = new ConfigurationBuilder()
 			.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
 			.AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production"}.json", optional: true)
 			.AddJsonFile($"appsettings.{(Debugger.IsAttached ? "VisualStudio" : "Production")}.json", optional: true)
 			.Build();
 
+		// settings 2: override values from command line
+		// settings 3: override values from <OverrideSettings> in definition file
+		var settings = config.Get<Settings>() ?? throw new ArgumentException("Settings could not be parsed.");
+		settings.OverrideWith(ParseCommandLine(args));
+		settings.OverrideWith(await ParseOverridesFromDefinitionFile(settings.DefinitionFile ?? string.Empty));
+
+		await settings.Validate();
+
 		Log.Logger = new LoggerConfiguration()
 			.WriteTo.File($"./logs/{DateTime.Now:yyyy-MM-dd-hh-mm-ss}.log")
 			.MinimumLevel.Verbose()
 			.CreateLogger();
 
-		var arguments = config.Get<Arguments>() ?? throw new ArgumentException("Arguments could not be parsed.");
-		arguments.DefinitionFile = definitionFile;
-		arguments.TargetPath = targetPath;
-		await arguments.Validate();
+		ChatClient = CreateChatClient(settings);
 
-		ChatClient = CreateChatClient(arguments);
-
-		Information($"Running {arguments.Model} ({arguments.Uri}) against {arguments.TargetPath}." + Environment.NewLine);
-		Log.Debug(JsonSerializer.Serialize(arguments, new JsonSerializerOptions { WriteIndented = true }));
+		Information($"Running {settings.Model} ({settings.Uri}) against {settings.TargetPath}." + Environment.NewLine);
+		Detail(JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true }));
 
 		var loader = new FileLoader();
 		var totalStopWatch = Stopwatch.StartNew();
 
 		Information("Locating all files ..." + Environment.NewLine);
-		var files = loader.GetAll(arguments.TargetPath, arguments.Files);
+		var files = loader.GetAll(settings.TargetPath ?? string.Empty, settings.Files ?? new Files([], []));
 		FileCount = files.Length;
 
 		var errors = 0;
@@ -81,14 +71,14 @@ internal static class Program
 				try
 				{
 					var retryMessage = attempt > 1 ? $"This is the {attempt}. attempt to process this file, all prior attempts failed because your response could not be processed. Please follow the instructions more closely." : "";
-					success = await ProcessFile(file, arguments.SystemPrompt, retryMessage, arguments, cancellationToken);
+					success = await ProcessFile(file, settings.SystemPrompt ?? string.Empty, retryMessage, settings, cancellationToken);
 				}
 				finally
 				{
 					stopwatch.Stop();
 					Detail($"{stopwatch.Elapsed}{Environment.NewLine}");
 				}
-			} while (!success && attempt < arguments.MaxRetries);
+			} while (!success && attempt < settings.MaxRetries);
 
 			if (!success)
 				errors++;
@@ -98,7 +88,76 @@ internal static class Program
 		Information($"{errors} error{(errors == 1 ? "" : "s")} occured.");
 	}
 
-	private static object GetFileSizeString(string file)
+	private static async Task<Settings> ParseOverridesFromDefinitionFile(string definitionFile)
+	{
+		const string XML_TAG = "OverrideSettings";
+
+		var content = await File.ReadAllTextAsync(definitionFile).ConfigureAwait(false);
+
+		var codeBlock = CodeBlockExtractor.Extract(content, XML_TAG) ?? string.Empty;
+
+		if (codeBlock.Trim().Any())
+			return JsonSerializer.Deserialize<Settings>(codeBlock, new JsonSerializerOptions { ReadCommentHandling = JsonCommentHandling.Skip }) ?? Settings.Empty;
+
+		return Settings.Empty;
+	}
+	public static Settings ParseCommandLine(string[] args)
+	{
+		static string MakeArgument(string value) => $"--{char.ToLowerInvariant(value[0])}{value[1..]}";
+
+		var settings = new Settings();
+		var providerOption = new Option<string>(MakeArgument(nameof(Settings.Provider)), "The provider name");
+		var apiKeyOption = new Option<string>(MakeArgument(nameof(Settings.ApiKey)), "The API key used for authentication");
+		var uriOption = new Option<string>(MakeArgument(nameof(Settings.Uri)), "The URI endpoint for the API");
+		var modelOption = new Option<string>(MakeArgument(nameof(Settings.Model)), "The model name to be used");
+		var targetPathOption = new Option<string>(MakeArgument(nameof(Settings.TargetPath)), "The source path where files are located");
+		var definitionFileOption = new Option<string>(MakeArgument(nameof(Settings.DefinitionFile)), "The path to the file defining the system prompt");
+		var writeResponseToConsoleOption = new Option<bool>(MakeArgument(nameof(Settings.WriteResponseToConsole)), "Whether to write the model's response to the console");
+		var modeOption = new Option<string>(MakeArgument(nameof(Settings.Mode)), "The mode in which llmaid is operating");
+		var assistantStarterOption = new Option<string>(MakeArgument(nameof(Settings.AssistantStarter)), "The string to start the assistant's message");
+		var temperatureOption = new Option<float?>(MakeArgument(nameof(Settings.Temperature)), "The temperature value for the model");
+		var systemPromptOption = new Option<string>(MakeArgument(nameof(Settings.SystemPrompt)), "The system prompt to be used with the model");
+		var maxRetriesOption = new Option<int>(MakeArgument(nameof(Settings.MaxRetries)), "The maximum number of retries if a response could not be processed");
+
+		var rootCommand = new RootCommand
+		{
+			providerOption,
+			apiKeyOption,
+			uriOption,
+			modelOption,
+			targetPathOption,
+			definitionFileOption,
+			writeResponseToConsoleOption,
+			modeOption,
+			assistantStarterOption,
+			temperatureOption,
+			systemPromptOption,
+			maxRetriesOption
+		};
+
+		rootCommand.SetHandler(context =>
+		{
+			settings.Provider = context.ParseResult.GetValueForOption(providerOption);
+			settings.ApiKey = context.ParseResult.GetValueForOption(apiKeyOption);
+			settings.Uri = context.ParseResult.GetValueForOption(uriOption) is string uri && !string.IsNullOrWhiteSpace(uri) ? new Uri(uri) : null;
+			settings.Model = context.ParseResult.GetValueForOption(modelOption);
+			settings.TargetPath = context.ParseResult.GetValueForOption(targetPathOption);
+			settings.DefinitionFile = context.ParseResult.GetValueForOption(definitionFileOption);
+			settings.WriteResponseToConsole = context.ParseResult.GetValueForOption(writeResponseToConsoleOption);
+			settings.Mode = context.ParseResult.GetValueForOption(modeOption);
+			settings.AssistantStarter = context.ParseResult.GetValueForOption(assistantStarterOption);
+			settings.Temperature = context.ParseResult.GetValueForOption(temperatureOption);
+			settings.SystemPrompt = context.ParseResult.GetValueForOption(systemPromptOption);
+			settings.MaxRetries = context.ParseResult.GetValueForOption(maxRetriesOption);
+			context.ExitCode = 0;
+		});
+
+		rootCommand.Invoke(args);
+
+		return settings;
+	}
+
+	private static string GetFileSizeString(string file)
 	{
 		try
 		{
@@ -110,7 +169,7 @@ internal static class Program
 		}
 	}
 
-	private static async Task<bool> ProcessFile(string file, string systemPromptTemplate, string retryMessage, Arguments arguments, CancellationToken cancellationToken)
+	private static async Task<bool> ProcessFile(string file, string systemPromptTemplate, string retryMessage, Settings settings, CancellationToken cancellationToken)
 	{
 		string originalCode = string.Empty;
 
@@ -153,12 +212,11 @@ internal static class Program
 			new() { Role = ChatRole.System, Text = systemPrompt }
 		};
 
-		var estimatedResponseLength = ResponseEstimator.EstimateResponseTokens(arguments, originalCode);
+		var estimatedResponseLength = EstimateResponseTokens(settings, originalCode);
 		var estimatedContextLength = (int)((systemPrompt.Length + originalCode.Length + estimatedResponseLength) / 3);
-		var options = new ChatOptions { Temperature = arguments.Temperature }
+		var options = new ChatOptions { Temperature = settings.Temperature }
 			.AddOllamaOption(OllamaOption.NumCtx, estimatedContextLength);
 
-		Log.Logger.Debug($"Estimated context length for system prompt ({systemPrompt.Length} chars) and code ({originalCode.Length} chars): {estimatedContextLength} tokens");
 		Information($"Estimated context length for system prompt ({systemPrompt.Length} chars) and code ({originalCode.Length} chars): {estimatedContextLength} tokens");
 
 		var generatedCodeBuilder = new StringBuilder();
@@ -183,9 +241,9 @@ internal static class Program
 					if (!string.IsNullOrEmpty(retryMessage))
 						messages.Add(new ChatMessage { Role = ChatRole.User, Text = retryMessage });
 
-					var hasAssistantStarter = !string.IsNullOrWhiteSpace(arguments.AssistantStarter);
+					var hasAssistantStarter = !string.IsNullOrWhiteSpace(settings.AssistantStarter);
 					if (hasAssistantStarter)
-						messages.Add(new ChatMessage { Role = ChatRole.Assistant, Text = arguments.AssistantStarter });
+						messages.Add(new ChatMessage { Role = ChatRole.Assistant, Text = settings.AssistantStarter });
 
 					response = await ChatClient.CompleteStreamingAsync(messages, options, cancellationToken).StreamToEndAsync(token =>
 					{
@@ -197,19 +255,19 @@ internal static class Program
 					}).ConfigureAwait(false);
 
 					if (hasAssistantStarter && response != null)
-						response.Text = arguments.AssistantStarter + response.Text;
+						response.Text = settings.AssistantStarter + response.Text;
 
 					receiveTask.Value = 100;
 				}
 			});
 
-		if (arguments.WriteResponseToConsole)
+		if (settings.WriteResponseToConsole ?? false)
 		{
 			Information("");
 			Code(response?.Text ?? "");
 		}
 
-		if (arguments.IsReplaceMode)
+		if (settings.IsReplaceMode)
 		{
 			var extractedCode = CodeBlockExtractor.Extract(response?.Text ?? "");
 			var couldExtractCode = !string.IsNullOrWhiteSpace(extractedCode);
@@ -231,25 +289,20 @@ internal static class Program
 			}
 		}
 
-		if (arguments.IsFindMode && !arguments.WriteResponseToConsole)
+		if (settings.IsFindMode && !(settings.WriteResponseToConsole ?? false))
 			Code(response?.Text ?? "");
 
 		return true;
 	}
 
-	private static IChatClient CreateChatClient(Arguments arguments)
+	private static IChatClient CreateChatClient(Settings settings)
 	{
 		var timeout = TimeSpan.FromMinutes(15);
 
-		if (arguments.Provider.Equals("ollama", StringComparison.OrdinalIgnoreCase))
-			return new OllamaApiClient(new HttpClient { BaseAddress = arguments.Uri, Timeout = timeout }, arguments.Model);
+		if ((settings.Provider ?? string.Empty).Equals("ollama", StringComparison.OrdinalIgnoreCase))
+			return new OllamaApiClient(new HttpClient { BaseAddress = settings.Uri, Timeout = timeout }, settings.Model ?? string.Empty);
 		else
-			return new OpenAIChatClient(new OpenAI.OpenAIClient(new ApiKeyCredential(arguments.ApiKey), new OpenAI.OpenAIClientOptions { Endpoint = arguments.Uri, NetworkTimeout = timeout }), arguments.Model);
-	}
-
-	private static void WriteLine(string color, string message)
-	{
-		AnsiConsole.MarkupLine($"[{color}]{Markup.Escape(message)}[/]");
+			return new OpenAIChatClient(new OpenAI.OpenAIClient(new ApiKeyCredential(settings.ApiKey ?? string.Empty), new OpenAI.OpenAIClientOptions { Endpoint = settings.Uri, NetworkTimeout = timeout }), settings.Model ?? string.Empty);
 	}
 
 	private static void Information(string message)
@@ -281,6 +334,12 @@ internal static class Program
 		WriteLine("gray", message);
 		Log.Verbose(message);
 	}
+
+	private static void WriteLine(string color, string message)
+	{
+		AnsiConsole.MarkupLine($"[{color}]{Markup.Escape(message)}[/]");
+	}
+
 	private static int CalculateProgress(double generatedCodeLength, double originalCodeLength)
 	{
 		var percentage = 0.0d;
@@ -348,19 +407,16 @@ internal static class Program
 		};
 	}
 
-	internal class ResponseEstimator
+	private static float EstimateResponseTokens(Settings settings, string code)
 	{
-		public static float EstimateResponseTokens(Arguments arguments, string code)
-		{
-			var inputLength = arguments.SystemPrompt.Length + code.Length;
+		var inputLength = (settings.SystemPrompt ?? string.Empty).Length + code.Length;
 
-			if (arguments.IsReplaceMode)
-				return (int)((inputLength + 1.25f * code.Length) / 3);  // fake the estimated length, the LLM is going to extend the class
+		if (settings.IsReplaceMode)
+			return (int)((inputLength + 1.25f * code.Length) / 3);  // fake the estimated length, the LLM is going to extend the class
 
-			if (arguments.IsFindMode)
-				return (int)((inputLength + 0.25f * code.Length) / 3);
+		if (settings.IsFindMode)
+			return (int)((inputLength + 0.25f * code.Length) / 3);
 
-			throw new NotSupportedException();
-		}
+		throw new NotSupportedException();
 	}
 }

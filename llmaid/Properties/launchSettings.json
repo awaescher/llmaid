@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "llmaid": {
+      "commandName": "Project",
+      "commandLineArgs": "--definitionFile \"../../../../prompts/code changer.txt\""
+    }
+  }
+}
