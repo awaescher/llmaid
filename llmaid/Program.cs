@@ -22,7 +22,7 @@ internal static class Program
 	{
 		using var cancellationTokenSource = new CancellationTokenSource();
 		var cancellationToken = cancellationTokenSource.Token;
-		
+
 		// settings 1: appsettings.json
 		var config = new ConfigurationBuilder()
 			.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
@@ -71,12 +71,16 @@ internal static class Program
 				try
 				{
 					var retryMessage = attempt > 1 ? $"This is the {attempt}. attempt to process this file, all prior attempts failed because your response could not be processed. Please follow the instructions more closely." : "";
-					success = await ProcessFile(file, settings.SystemPrompt ?? string.Empty, retryMessage, settings, cancellationToken);
+					if (settings.DryRun)
+						success = true;
+					else
+						success = await ProcessFile(file, settings.SystemPrompt ?? string.Empty, retryMessage, settings, cancellationToken);
 				}
 				finally
 				{
 					stopwatch.Stop();
-					Detail($"{stopwatch.Elapsed}{Environment.NewLine}");
+					if (!settings.DryRun)
+						Detail($"{stopwatch.Elapsed}{Environment.NewLine}");
 				}
 			} while (!success && attempt < settings.MaxRetries);
 
@@ -213,7 +217,8 @@ internal static class Program
 		};
 
 		var estimatedResponseLength = EstimateResponseTokens(settings, originalCode);
-		var estimatedContextLength = (int)((systemPrompt.Length + originalCode.Length + estimatedResponseLength) / 3);
+		var estimatedContextLength = EstimateContextLength(originalCode, systemPrompt, estimatedResponseLength);
+
 		var options = new ChatOptions { Temperature = settings.Temperature }
 			.AddOllamaOption(OllamaOption.NumCtx, estimatedContextLength);
 
@@ -407,7 +412,7 @@ internal static class Program
 		};
 	}
 
-	private static float EstimateResponseTokens(Settings settings, string code)
+	private static int EstimateResponseTokens(Settings settings, string code)
 	{
 		var inputLength = (settings.SystemPrompt ?? string.Empty).Length + code.Length;
 
@@ -418,5 +423,11 @@ internal static class Program
 			return (int)((inputLength + 0.25f * code.Length) / 3);
 
 		throw new NotSupportedException();
+	}
+
+	private static int EstimateContextLength(string originalCode, string systemPrompt, int estimatedResponseTokens)
+	{
+		var contextLength = (systemPrompt.Length + originalCode.Length + estimatedResponseTokens) / 3;
+		return Math.Max(2048, contextLength);
 	}
 }

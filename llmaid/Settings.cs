@@ -70,6 +70,12 @@ public class Settings
 	public string? Mode { get; set; }
 
 	/// <summary>
+	/// Gets or sets a value indicating whether the operation should be a dry run.
+	/// If set to <c>true</c>, the operation will simulate the actions without making any actual changes.
+	/// </summary>
+	public bool DryRun { get; set; }
+
+	/// <summary>
 	/// Gets or sets the string that should be used to start the assistant's message.
 	/// Can be used to make the model think it started with the a code block already to prevent it from talking about it.
 	/// </summary>
