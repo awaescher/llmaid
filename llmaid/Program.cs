@@ -98,7 +98,7 @@ internal static class Program
 
 		var content = await File.ReadAllTextAsync(definitionFile).ConfigureAwait(false);
 
-		var codeBlock = CodeBlockExtractor.Extract(content, XML_TAG) ?? string.Empty;
+		var codeBlock = CodeBlockExtractor.ExtractXml(content, XML_TAG) ?? string.Empty;
 
 		if (codeBlock.Trim().Any())
 			return JsonSerializer.Deserialize<Settings>(codeBlock, new JsonSerializerOptions { ReadCommentHandling = JsonCommentHandling.Skip }) ?? Settings.Empty;
@@ -226,7 +226,7 @@ internal static class Program
 
 		var generatedCodeBuilder = new StringBuilder();
 
-		StreamingChatCompletionUpdate? response = null;
+		ChatResponseUpdate? response = null;
 
 		await AnsiConsole.Progress()
 			.AutoClear(true)
@@ -250,7 +250,7 @@ internal static class Program
 					if (hasAssistantStarter)
 						messages.Add(new ChatMessage { Role = ChatRole.Assistant, Text = settings.AssistantStarter });
 
-					response = await ChatClient.CompleteStreamingAsync(messages, options, cancellationToken).StreamToEndAsync(token =>
+					response = await ChatClient.GetStreamingResponseAsync(messages, options, cancellationToken).StreamToEndAsync(token =>
 					{
 						if (waitTask.Value == 0)
 							waitTask.Increment(100);
