@@ -213,7 +213,7 @@ internal static class Program
 
 		var messages = new List<ChatMessage>
 		{
-			new() { Role = ChatRole.System, Text = systemPrompt }
+			new(ChatRole.System, systemPrompt)
 		};
 
 		var estimatedResponseLength = EstimateResponseTokens(settings, originalCode);
@@ -241,14 +241,14 @@ internal static class Program
 				{
 					sendTask.Increment(100);
 
-					messages.Add(new ChatMessage { Role = ChatRole.User, Text = userPrompt });
+					messages.Add(new ChatMessage(ChatRole.User, userPrompt));
 
 					if (!string.IsNullOrEmpty(retryMessage))
-						messages.Add(new ChatMessage { Role = ChatRole.User, Text = retryMessage });
+						messages.Add(new ChatMessage(ChatRole.User, retryMessage));
 
 					var hasAssistantStarter = !string.IsNullOrWhiteSpace(settings.AssistantStarter);
 					if (hasAssistantStarter)
-						messages.Add(new ChatMessage { Role = ChatRole.Assistant, Text = settings.AssistantStarter });
+						messages.Add(new ChatMessage(ChatRole.Assistant, settings.AssistantStarter));
 
 					response = await ChatClient.GetStreamingResponseAsync(messages, options, cancellationToken).StreamToEndAsync(token =>
 					{
@@ -260,7 +260,7 @@ internal static class Program
 					}).ConfigureAwait(false);
 
 					if (hasAssistantStarter && response != null)
-						response.Text = settings.AssistantStarter + response.Text;
+						generatedCodeBuilder.Insert(0, settings.AssistantStarter);
 
 					receiveTask.Value = 100;
 				}
@@ -303,11 +303,25 @@ internal static class Program
 	private static IChatClient CreateChatClient(Settings settings)
 	{
 		var timeout = TimeSpan.FromMinutes(15);
+		var provider = settings.Provider ?? string.Empty;
 
-		if ((settings.Provider ?? string.Empty).Equals("ollama", StringComparison.OrdinalIgnoreCase))
+		if (provider.Equals("ollama", StringComparison.OrdinalIgnoreCase))
+		{
 			return new OllamaApiClient(new HttpClient { BaseAddress = settings.Uri, Timeout = timeout }, settings.Model ?? string.Empty);
+		}
+		else if (provider.Equals("lmstudio", StringComparison.OrdinalIgnoreCase) || provider.Equals("openai-compatible", StringComparison.OrdinalIgnoreCase))
+		{
+			// LM Studio and other OpenAI-compatible servers
+			// LM Studio default endpoint: http://localhost:1234/v1
+			// API key can be empty or any string for local servers
+			var apiKey = string.IsNullOrWhiteSpace(settings.ApiKey) ? "lm-studio" : settings.ApiKey;
+			return new OpenAI.OpenAIClient(new ApiKeyCredential(apiKey), new OpenAI.OpenAIClientOptions { Endpoint = settings.Uri, NetworkTimeout = timeout }).GetChatClient(settings.Model ?? string.Empty).AsIChatClient();
+		}
 		else
-			return new OpenAIChatClient(new OpenAI.OpenAIClient(new ApiKeyCredential(settings.ApiKey ?? string.Empty), new OpenAI.OpenAIClientOptions { Endpoint = settings.Uri, NetworkTimeout = timeout }), settings.Model ?? string.Empty);
+		{
+			// OpenAI
+			return new OpenAI.OpenAIClient(new ApiKeyCredential(settings.ApiKey ?? string.Empty), new OpenAI.OpenAIClientOptions { Endpoint = settings.Uri, NetworkTimeout = timeout }).GetChatClient(settings.Model ?? string.Empty).AsIChatClient();
+		}
 	}
 
 	private static void Information(string message)

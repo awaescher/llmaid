@@ -1,8 +1,8 @@
 ﻿<OverrideSettings>
 {
-	"Temperature": 0.5,
+	"Temperature": 0.25,
 	"Mode": "replacefile", // find or replacefile
-	"Model": "qwen2.5-coder:32b",
+	"Model": "openai/gpt-oss-120b",
 	"AssistantStarter": "", // used to make the model think it started with the file contents already to prevent the llm from talking about the code
 	"MaxRetries":  1,
 	"Files": {

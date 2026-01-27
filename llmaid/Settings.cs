@@ -24,13 +24,15 @@ public class Settings
 	public bool IsReplaceMode => Mode == REPLACEFILE_MODE;
 
 	/// <summary>
-	/// Gets or sets the provider name, which must be either 'ollama' or 'openai'.
+	/// Gets or sets the provider name, which must be 'ollama', 'openai', 'lmstudio', or 'openai-compatible'.
+	/// Use 'lmstudio' for LM Studio's local API (default: http://localhost:1234/v1).
+	/// Use 'openai-compatible' for any other OpenAI-compatible API endpoints.
 	/// </summary>
 	public string? Provider { get; set; }
 
 	/// <summary>
 	/// Gets or sets the API key used for authentication with the provider.
-	/// Not required for Ollama.
+	/// Not required for Ollama or LM Studio (leave empty or use any placeholder).
 	/// </summary>
 	public string? ApiKey { get; set; }
 
@@ -108,9 +110,12 @@ public class Settings
 		if (string.IsNullOrEmpty(Uri?.AbsolutePath))
 			throw new ArgumentException("Uri has to be defined.");
 
-		var knownProvider = "ollama".Equals(Provider, StringComparison.OrdinalIgnoreCase) || "openai".Equals(Provider, StringComparison.OrdinalIgnoreCase);
+		var knownProvider = "ollama".Equals(Provider, StringComparison.OrdinalIgnoreCase) 
+			|| "openai".Equals(Provider, StringComparison.OrdinalIgnoreCase)
+			|| "lmstudio".Equals(Provider, StringComparison.OrdinalIgnoreCase)
+			|| "openai-compatible".Equals(Provider, StringComparison.OrdinalIgnoreCase);
 		if (!knownProvider)
-			throw new ArgumentException("Provider has to be 'ollama' or 'openai'.");
+			throw new ArgumentException("Provider has to be 'ollama', 'openai', 'lmstudio', or 'openai-compatible'.");
 
 		var knownMode = FIND_MODE.Equals(Mode, StringComparison.OrdinalIgnoreCase) || REPLACEFILE_MODE.Equals(Mode, StringComparison.OrdinalIgnoreCase);
 		if (!knownMode)

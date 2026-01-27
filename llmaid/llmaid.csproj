@@ -19,11 +19,13 @@
   <ItemGroup>
     <PackageReference Include="glob" Version="1.1.9" />
     <PackageReference Include="Ignore" Version="0.2.1" />
-    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="9.0.0-preview.9.24556.5" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.2.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.2.0-preview.1.26063.2" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="8.0.2" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.1" />
-    <PackageReference Include="OllamaSharp" Version="5.1.1" />
+    <PackageReference Include="OllamaSharp" Version="5.4.13" />
+    <PackageReference Include="OpenAI" Version="2.8.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
     <PackageReference Include="Spectre.Console" Version="0.49.1" />
     <PackageReference Include="System.Commandline" Version="2.0.0-beta4.22272.1" />
