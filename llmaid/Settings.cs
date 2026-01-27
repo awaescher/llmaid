@@ -110,7 +110,7 @@ public class Settings
 		if (string.IsNullOrEmpty(Uri?.AbsolutePath))
 			throw new ArgumentException("Uri has to be defined.");
 
-		var knownProvider = "ollama".Equals(Provider, StringComparison.OrdinalIgnoreCase) 
+		var knownProvider = "ollama".Equals(Provider, StringComparison.OrdinalIgnoreCase)
 			|| "openai".Equals(Provider, StringComparison.OrdinalIgnoreCase)
 			|| "lmstudio".Equals(Provider, StringComparison.OrdinalIgnoreCase)
 			|| "openai-compatible".Equals(Provider, StringComparison.OrdinalIgnoreCase);

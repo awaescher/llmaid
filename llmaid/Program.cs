@@ -1,14 +1,15 @@
+using System.ClientModel;
+using System.CommandLine;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
-using OllamaSharp;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
+using Microsoft.ML.Tokenizers;
+using OllamaSharp;
+using OllamaSharp.Models;
 using Serilog;
 using Spectre.Console;
-using OllamaSharp.Models;
-using System.ClientModel;
-using System.CommandLine;
 
 namespace llmaid;
 
@@ -18,12 +19,17 @@ internal static class Program
 	internal static int FileCount { get; set; }
 	internal static int CurrentFileIndex { get; set; }
 
+	// Tokenizer for accurate token estimation (o200k_base is the standard for GPT-4o and similar models)
+
+	private static readonly Tokenizer Tokenizer = TiktokenTokenizer.CreateForModel("gpt-4o");
+
 	static async Task Main(string[] args)
 	{
 		using var cancellationTokenSource = new CancellationTokenSource();
 		var cancellationToken = cancellationTokenSource.Token;
 
 		// settings 1: appsettings.json
+
 		var config = new ConfigurationBuilder()
 			.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
 			.AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production"}.json", optional: true)
@@ -32,6 +38,7 @@ internal static class Program
 
 		// settings 2: override values from command line
 		// settings 3: override values from <OverrideSettings> in definition file
+
 		var settings = config.Get<Settings>() ?? throw new ArgumentException("Settings could not be parsed.");
 		settings.OverrideWith(ParseCommandLine(args));
 		settings.OverrideWith(await ParseOverridesFromDefinitionFile(settings.DefinitionFile ?? string.Empty));
@@ -98,12 +105,32 @@ internal static class Program
 
 		var content = await File.ReadAllTextAsync(definitionFile).ConfigureAwait(false);
 
-		var codeBlock = CodeBlockExtractor.ExtractXml(content, XML_TAG) ?? string.Empty;
+		var settingsBlock = CodeBlockExtractor.ExtractXml(content, XML_TAG) ?? string.Empty;
 
-		if (codeBlock.Trim().Any())
-			return JsonSerializer.Deserialize<Settings>(codeBlock, new JsonSerializerOptions { ReadCommentHandling = JsonCommentHandling.Skip }) ?? Settings.Empty;
+		Settings settings;
+		if (settingsBlock.Trim().Any())
+			settings = JsonSerializer.Deserialize<Settings>(settingsBlock, new JsonSerializerOptions { ReadCommentHandling = JsonCommentHandling.Skip }) ?? Settings.Empty;
+		else
+			settings = Settings.Empty;
 
-		return Settings.Empty;
+		// Extract the system prompt: everything after </OverrideSettings>
+
+		var closingTag = $"</{XML_TAG}>";
+		var closingTagIndex = content.IndexOf(closingTag, StringComparison.OrdinalIgnoreCase);
+		if (closingTagIndex >= 0)
+		{
+			var systemPrompt = content[(closingTagIndex + closingTag.Length)..].Trim();
+			if (!string.IsNullOrWhiteSpace(systemPrompt))
+				settings.SystemPrompt = systemPrompt;
+		}
+		else if (string.IsNullOrWhiteSpace(settingsBlock))
+		{
+			// No OverrideSettings found - the entire file is the system prompt
+
+			settings.SystemPrompt = content.Trim();
+		}
+
+		return settings;
 	}
 	public static Settings ParseCommandLine(string[] args)
 	{
@@ -216,13 +243,18 @@ internal static class Program
 			new(ChatRole.System, systemPrompt)
 		};
 
-		var estimatedResponseLength = EstimateResponseTokens(settings, originalCode);
-		var estimatedContextLength = EstimateContextLength(originalCode, systemPrompt, estimatedResponseLength);
+		var systemPromptTokens = CountTokens(systemPrompt);
+		var userPromptTokens = CountTokens(userPrompt);
+		var inputTokens = systemPromptTokens + userPromptTokens;
+		var estimatedResponseTokens = EstimateResponseTokens(settings, originalCode);
+		var estimatedContextLength = EstimateContextLength(originalCode, systemPrompt, estimatedResponseTokens);
 
 		var options = new ChatOptions { Temperature = settings.Temperature }
 			.AddOllamaOption(OllamaOption.NumCtx, estimatedContextLength);
 
-		Information($"Estimated context length for system prompt ({systemPrompt.Length} chars) and code ({originalCode.Length} chars): {estimatedContextLength} tokens");
+		Information($"Input tokens: {inputTokens} (system: {systemPromptTokens}, user: {userPromptTokens})");
+		Information($"Estimated output tokens: {estimatedResponseTokens}");
+		Information($"Estimated context length: {estimatedContextLength} tokens");
 
 		var generatedCodeBuilder = new StringBuilder();
 
@@ -256,7 +288,7 @@ internal static class Program
 							waitTask.Increment(100);
 
 						generatedCodeBuilder.Append(token?.Text ?? "");
-						receiveTask.Value = CalculateProgress(generatedCodeBuilder.Length, estimatedResponseLength);
+						receiveTask.Value = CalculateProgress(generatedCodeBuilder.Length, estimatedResponseTokens);
 					}).ConfigureAwait(false);
 
 					if (hasAssistantStarter && response != null)
@@ -266,15 +298,23 @@ internal static class Program
 				}
 			});
 
+		// Show actual token usage
+
+		var responseText = response?.Text ?? "";
+		var responseTokens = CountTokens(responseText);
+		var totalTokens = inputTokens + responseTokens;
+		Detail($"Actual output: {responseTokens} tokens (estimated: {estimatedResponseTokens})");
+		Detail($"Total: {totalTokens} tokens (input: {inputTokens} + output: {responseTokens})");
+
 		if (settings.WriteResponseToConsole ?? false)
 		{
 			Information("");
-			Code(response?.Text ?? "");
+			Code(responseText);
 		}
 
 		if (settings.IsReplaceMode)
 		{
-			var extractedCode = CodeBlockExtractor.Extract(response?.Text ?? "");
+			var extractedCode = CodeBlockExtractor.Extract(responseText);
 			var couldExtractCode = !string.IsNullOrWhiteSpace(extractedCode);
 			if (couldExtractCode)
 			{
@@ -282,7 +322,7 @@ internal static class Program
 			}
 			else
 			{
-				var wasOkay = (response?.Text ?? "").Trim().EndsWith("[OK]", StringComparison.OrdinalIgnoreCase);
+				var wasOkay = responseText.Trim().EndsWith("[OK]", StringComparison.OrdinalIgnoreCase);
 				if (wasOkay)
 				{
 					Information("The model returned 'OK' signaling that no changes were required.");
@@ -295,7 +335,7 @@ internal static class Program
 		}
 
 		if (settings.IsFindMode && !(settings.WriteResponseToConsole ?? false))
-			Code(response?.Text ?? "");
+			Code(responseText);
 
 		return true;
 	}
@@ -314,12 +354,14 @@ internal static class Program
 			// LM Studio and other OpenAI-compatible servers
 			// LM Studio default endpoint: http://localhost:1234/v1
 			// API key can be empty or any string for local servers
+
 			var apiKey = string.IsNullOrWhiteSpace(settings.ApiKey) ? "lm-studio" : settings.ApiKey;
 			return new OpenAI.OpenAIClient(new ApiKeyCredential(apiKey), new OpenAI.OpenAIClientOptions { Endpoint = settings.Uri, NetworkTimeout = timeout }).GetChatClient(settings.Model ?? string.Empty).AsIChatClient();
 		}
 		else
 		{
 			// OpenAI
+
 			return new OpenAI.OpenAIClient(new ApiKeyCredential(settings.ApiKey ?? string.Empty), new OpenAI.OpenAIClientOptions { Endpoint = settings.Uri, NetworkTimeout = timeout }).GetChatClient(settings.Model ?? string.Empty).AsIChatClient();
 		}
 	}
@@ -359,12 +401,15 @@ internal static class Program
 		AnsiConsole.MarkupLine($"[{color}]{Markup.Escape(message)}[/]");
 	}
 
-	private static int CalculateProgress(double generatedCodeLength, double originalCodeLength)
+	private static int CalculateProgress(double generatedChars, double estimatedTokens)
 	{
+		// Approximate tokens from characters (average ~4 characters per token for code)
+
+		var estimatedGeneratedTokens = generatedChars / 4.0;
 		var percentage = 0.0d;
 
-		if (originalCodeLength > 0 && generatedCodeLength > 0)
-			percentage = (generatedCodeLength / originalCodeLength) * 100;
+		if (estimatedTokens > 0 && estimatedGeneratedTokens > 0)
+			percentage = (estimatedGeneratedTokens / estimatedTokens) * 100;
 
 		return Math.Min(100, Math.Max(0, (int)percentage));
 	}
@@ -426,22 +471,39 @@ internal static class Program
 		};
 	}
 
+
+	/// <summary>
+	/// Counts the actual number of tokens in a text using a real tokenizer.
+	/// </summary>
+	private static int CountTokens(string text)
+	{
+		if (string.IsNullOrEmpty(text))
+			return 0;
+
+		return Tokenizer.CountTokens(text);
+	}
+
 	private static int EstimateResponseTokens(Settings settings, string code)
 	{
-		var inputLength = (settings.SystemPrompt ?? string.Empty).Length + code.Length;
+		var systemPromptTokens = CountTokens(settings.SystemPrompt ?? string.Empty);
+		var codeTokens = CountTokens(code);
 
 		if (settings.IsReplaceMode)
-			return (int)((inputLength + 1.25f * code.Length) / 3);  // fake the estimated length, the LLM is going to extend the class
+			return (int)(systemPromptTokens + codeTokens * 1.25f);  // The LLM will extend/modify the code
+
 
 		if (settings.IsFindMode)
-			return (int)((inputLength + 0.25f * code.Length) / 3);
+			return (int)(systemPromptTokens + codeTokens * 0.25f);  // Only short responses expected
+
 
 		throw new NotSupportedException();
 	}
 
 	private static int EstimateContextLength(string originalCode, string systemPrompt, int estimatedResponseTokens)
 	{
-		var contextLength = (systemPrompt.Length + originalCode.Length + estimatedResponseTokens) / 3;
+		var systemPromptTokens = CountTokens(systemPrompt);
+		var codeTokens = CountTokens(originalCode);
+		var contextLength = systemPromptTokens + codeTokens + estimatedResponseTokens;
 		return Math.Max(2048, contextLength);
 	}
 }
