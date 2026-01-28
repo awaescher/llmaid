@@ -41,15 +41,15 @@ internal static class Program
 
 		// Layer 1: Load base settings from appsettings.json
 		var settings = config.Get<Settings>() ?? throw new ArgumentException("Settings could not be parsed.");
-		
+
 		// Parse CLI args early to get profile path (but don't apply other CLI args yet)
 		var cliSettings = ParseCommandLine(args);
 		var profilePath = cliSettings.Profile ?? settings.Profile;
-		
+
 		// Layer 2: Override with profile file settings (if provided)
 		if (!string.IsNullOrWhiteSpace(profilePath))
 			settings.OverrideWith(await ParseProfileFile(profilePath));
-		
+
 		// Layer 3: Override with CLI arguments (highest priority)
 		settings.OverrideWith(cliSettings);
 
@@ -123,10 +123,10 @@ internal static class Program
 			.WithNamingConvention(YamlDotNet.Serialization.NamingConventions.CamelCaseNamingConvention.Instance)
 			.IgnoreUnmatchedProperties()
 			.Build();
-		
+
 		return deserializer.Deserialize<Settings>(content) ?? Settings.Empty;
 	}
-	
+
 	public static Settings ParseCommandLine(string[] args)
 	{
 		static string MakeArgument(string value) => $"--{char.ToLowerInvariant(value[0])}{value[1..]}";
