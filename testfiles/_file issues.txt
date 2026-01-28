@@ -16,7 +16,7 @@ frmMain
  - should TODO and empty argument summaries
  - methods are private, summaries are optional
 
- Unprofessional content filter:
+ Unprofessional content finder:
 
  cache.php
   - I freaking hate PHP (unrelated)

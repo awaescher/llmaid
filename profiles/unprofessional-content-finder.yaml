@@ -1,4 +1,4 @@
-# Unprofessional Content Filter Profile
+# Unprofessional Content Finder Profile
 # Scans code for inappropriate language in a professional setting
 
 model: gpt-4o

@@ -1,0 +1,29 @@
+<Solution>
+  <Folder Name="/profiles/">
+    <File Path="profiles/code-changer-vb.yaml" />
+    <File Path="profiles/code-changer.yaml" />
+    <File Path="profiles/code-documenter.yaml" />
+    <File Path="profiles/nda-checker.yaml" />
+    <File Path="profiles/sql-injection-changer.yaml" />
+    <File Path="profiles/unprofessional-content-finder.yaml" />
+    <File Path="profiles/unprofessional-content-fixer.yaml" />
+    <File Path="profiles/wiki-proofreader.yaml" />
+  </Folder>
+  <Folder Name="/testfiles/">
+    <File Path="testfiles/cache.php" />
+    <File Path="testfiles/Concurrency.swift" />
+    <File Path="testfiles/contract.sol" />
+    <File Path="testfiles/FileReader.cs" />
+    <File Path="testfiles/frmMain.vb" />
+    <File Path="testfiles/JumpWidget.cpp" />
+    <File Path="testfiles/register.go" />
+    <File Path="testfiles/reverse.js" />
+    <File Path="testfiles/router.rb" />
+    <File Path="testfiles/SystemInfo.cs" />
+    <File Path="testfiles/user.ts" />
+    <File Path="testfiles/usermanager.py" />
+    <File Path="testfiles/_file issues.txt" />
+  </Folder>
+  <Project Path="llmaid/llmaid.csproj" />
+  <Project Path="Tests/Tests.csproj" />
+</Solution>
