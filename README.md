@@ -4,12 +4,20 @@ Throw files against LLMs.
 
 llmaid is a command-line tool designed to automate the process of AI supported file changes using large language models. It reads source code files, sends them to Ollama, LM Studio, or any OpenAI-compatible API, and writes back the models answers. The tool is highly configurable and supports every kind of text-based input file.
 
-> But there is GitHub Copilot, Cursor, Claude Code, OpenCode and so many more. Isn't llmaid outdated?
+---
 
-Yes. But it serves a slightly different use-case. These partly autonomous agents are amazing and make sense. But they cannot be used to fix typos or add documentation in every single code file of a repository. These tools work in a different way and need to minimize their context while navigating through your codebase. llmaid is different: Every file is a new conversation. While there is no autonomous intelligence, it can review or edit every file in total based on your instructions. This is handy to find things in your codebase you could not search with RegEx, for example. The feature of writing the LLM response back also enables batch-processing of every single file in the codebase, like "fix all typos".
+### 💬 But there is GitHub Copilot, Cursor, Claude Code, OpenCode and so many more. Isn't llmaid outdated?
+
+Yes, very. But it serves a slightly different use-case.
+
+These partly autonomous agents are amazing but they cannot be used to fix typos or add documentation in every single code file of a repository. These tools work in a different way and need to minimize their context while navigating through your codebase.
+
+llmaid is different: Every file is a new conversation. While there is no autonomous intelligence, it can review or edit every file in total based on your instructions. This is handy to find things in your codebase you could not search with RegEx, for example. The feature of writing the LLM response back also enables batch-processing of every single file in the codebase, like "fix all typos".
+
+---
 
 > [!NOTE]
-> 1. Paid services such as ChatGPT can cause high API costs if they are used with many files. Double check your jobs.
+> 1. Paid services such as ChatGPT can cause high API costs if they are used with many files. Double check your config.
 > 2. You may get lower quality when using local models with [Ollama](https://ollama.com) or [LM Studio](https://lmstudio.ai), but it's completely free and your files will never leave your computer.
 
 ![image](https://github.com/user-attachments/assets/015ba09b-4ce5-439f-a6af-4e20da6e511e)
@@ -17,9 +25,6 @@ Yes. But it serves a slightly different use-case. These partly autonomous agents
 ## What can it do?
 
 llmaid will run through every file in a path you specify and rewrite, analyse or summarize it. Pretty much everything you can come up with, as long as you can write a good system prompt.
-
-> [!NOTE]
-> The quality mainly depends on the model you want to use. ChatGPT works great, but I have also had good results with medium sized local models like `mistral-small:22b` and `qwen2.5:32b`.
 
 This repository provides a [few profile files](/profiles), for example:
 
@@ -86,7 +91,6 @@ targetPath: ./src
 temperature: 0.25
 applyCodeblock: true
 maxRetries: 1
-cooldownSeconds: 5  # wait 5 seconds between files to prevent overheating
 
 files:
   include:
@@ -140,7 +144,7 @@ Available arguments:
 - `--dryRun` – Simulate without changes
 - `--maxRetries` – Retry count on failures
 - `--verbose` – Show detailed output (tokens, timing, settings)
-- `--cooldownSeconds` – Cooldown time in seconds after processing each file (default: 0, prevents processor overheating)
+- `--cooldownSeconds` – Cooldown time after processing each file to prevent overheating (default: 0)
 
 ### Supported Providers
 
