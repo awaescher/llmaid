@@ -27,12 +27,12 @@ systemPrompt: |
 
   1. **Typos** → Fix obvious spelling mistakes in comments and strings
   
-  2. **Profanity/Swear words** → Replace with `********`
+  2. **Profanity/Swear words** → Rewrite or remove, replace with `********` if critical
      - Includes masked versions with * or numbers (e.g., f*ck, sh1t)
   
-  3. **Sensitive data** → Replace values with `********`
+  3. **Sensitive data** → Add a TODO comment to the end of the corresponding line to force manual reviews (text: "TODO security review: sensitive data")
      - Hardcoded passwords, API keys, secrets
-     - Keep variable names, only mask the actual value
+     - Skip sensitive data in test classes that are obviously automated tests
   
   4. **Negative comments** → Rewrite professionally
      - Insults, frustration, or negativity about code/colleagues/users
