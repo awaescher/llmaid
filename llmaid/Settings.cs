@@ -132,6 +132,13 @@ public class Settings
 	public int? CooldownSeconds { get; set; }
 
 	/// <summary>
+	/// Gets or sets the maximum number of tokens a file may contain before it is skipped.
+	/// Files exceeding this limit will not be processed. Default is 102400.
+	/// </summary>
+	[JsonPropertyName("maxFileTokens")]
+	public int? MaxFileTokens { get; set; } = 102400;
+
+	/// <summary>
 	/// Validates the current arguments, ensuring all required fields are properly set.
 	/// </summary>
 	/// <param name="requireProfile">If true, validates that a profile file exists. Set to false when running purely from CLI.</param>

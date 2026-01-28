@@ -161,6 +161,7 @@ internal static class Program
 		var verboseOption = new Option<bool?>(MakeArgument(nameof(Settings.Verbose)), "Show detailed output including tokens and timing information");
 		verboseOption.Arity = ArgumentArity.ZeroOrOne;
 		var cooldownSecondsOption = new Option<int?>(MakeArgument(nameof(Settings.CooldownSeconds)), "Cooldown time in seconds after processing each file (prevents overheating)");
+		var maxFileTokensOption = new Option<int?>(MakeArgument(nameof(Settings.MaxFileTokens)), "Maximum number of tokens a file may contain before it is skipped (default: 102400)");
 
 		var rootCommand = new RootCommand
 		{
@@ -178,7 +179,8 @@ internal static class Program
 			systemPromptOption,
 			maxRetriesOption,
 			verboseOption,
-			cooldownSecondsOption
+			cooldownSecondsOption,
+			maxFileTokensOption
 		};
 
 		rootCommand.SetHandler(context =>
@@ -206,6 +208,7 @@ internal static class Program
 				settings.Verbose = context.ParseResult.GetValueForOption(verboseOption) ?? true;
 
 			settings.CooldownSeconds = context.ParseResult.GetValueForOption(cooldownSecondsOption);
+			settings.MaxFileTokens = context.ParseResult.GetValueForOption(maxFileTokensOption);
 
 			context.ExitCode = 0;
 		});
@@ -244,6 +247,14 @@ internal static class Program
 		if (originalCode.Length < 1)
 		{
 			LogWarning($"Skipped file {file}: No content.");
+			return false;
+		}
+
+		var fileTokens = CountTokens(originalCode);
+		var maxTokens = settings.MaxFileTokens ?? 102400;
+		if (fileTokens > maxTokens)
+		{
+			LogWarning($"Skipped file {file}: {fileTokens} tokens exceeds maximum of {maxTokens} tokens.");
 			return false;
 		}
 

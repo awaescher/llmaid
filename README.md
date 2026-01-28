@@ -75,7 +75,8 @@ This file only contains your LLM provider connection settings:
   "ApiKey": "",
   "WriteResponseToConsole": true,
   "CooldownSeconds": 0,
-  "OllamaMinNumCtx": 64000 // Minimum context length for the Ollama provider to prevent unnecessary model reloads (default 20480)
+  "MaxFileTokens": 102400,
+  "OllamaMinNumCtx": 24000 // Minimum context length for the Ollama provider to prevent unnecessary model reloads (default 20480)
 }
 ```
 
@@ -145,6 +146,7 @@ Available arguments:
 - `--maxRetries` – Retry count on failures
 - `--verbose` – Show detailed output (tokens, timing, settings)
 - `--cooldownSeconds` – Cooldown time after processing each file to prevent overheating (default: 0)
+- `--maxFileTokens` – Maximum tokens a file may contain before it is skipped (default: 102400)
 
 ### Supported Providers
 
