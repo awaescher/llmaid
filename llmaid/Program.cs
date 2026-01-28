@@ -110,7 +110,7 @@ internal static class Program
 
 			// Apply cooldown after processing each file (if configured)
 			var cooldownSeconds = settings.CooldownSeconds ?? 0;
-			if (cooldownSeconds > 0)
+			if (cooldownSeconds > 0 && !settings.DryRun)
 			{
 				LogVerboseDetail($"Cooling down for {cooldownSeconds} seconds...");
 				await Task.Delay(TimeSpan.FromSeconds(cooldownSeconds), cancellationToken);
