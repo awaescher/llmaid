@@ -22,6 +22,12 @@ public class Settings
 	/// </summary>
 	[JsonPropertyName("provider")]
 	public string? Provider { get; set; }
+	
+	/// <summary>
+	/// Minimum context length for the Ollama provider to prevent model unnecessary model reloads
+	/// </summary>
+	[JsonPropertyName("ollamaMinNumCtx")]
+	public int OllamaMinNumCtx { get; set; } = 20480;
 
 	/// <summary>
 	/// Gets or sets the API key used for authentication with the provider.

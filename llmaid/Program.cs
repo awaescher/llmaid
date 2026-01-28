@@ -278,7 +278,7 @@ internal static class Program
 		var estimatedContextLength = EstimateContextLength(originalCode, systemPrompt, estimatedResponseTokens);
 
 		var options = new ChatOptions { Temperature = settings.Temperature }
-			.AddOllamaOption(OllamaOption.NumCtx, estimatedContextLength);
+		    .AddOllamaOption(OllamaOption.NumCtx, Math.Max(estimatedContextLength, settings.OllamaMinNumCtx)); // use a minimum context length for the Ollama provider to prevent unnecessary model reloads
 
 		LogVerboseInfo($"Input tokens: {inputTokens} (system: {systemPromptTokens}, user: {userPromptTokens})");
 		LogVerboseInfo($"Estimated output tokens: {estimatedResponseTokens}");

@@ -63,7 +63,8 @@ This file only contains your LLM provider connection settings:
   "Uri": "http://localhost:1234/v1",
   "ApiKey": "",
   "WriteResponseToConsole": true,
-  "CooldownSeconds": 0
+  "CooldownSeconds": 0,
+  "OllamaMinNumCtx": 64000 // Minimum context length for the Ollama provider to prevent unnecessary model reloads (default 20480)
 }
 ```
 
