@@ -3,7 +3,7 @@
 
 model: deepseek-coder-v2:16b
 temperature: 0.5
-mode: replacefile
+applyCodeblock: true
 maxRetries: 1
 
 files:

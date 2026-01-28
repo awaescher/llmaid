@@ -20,7 +20,7 @@ public class SettingsTests
 				Files = new Files([], []),
 				Profile = "file1",
 				WriteResponseToConsole = true,
-				Mode = "find",
+				ApplyCodeblock = false,
 				AssistantStarter = "starter1",
 				Temperature = 0.5f,
 				SystemPrompt = "prompt1",
@@ -37,7 +37,7 @@ public class SettingsTests
 				Files = new Files([], []),
 				Profile = "file2",
 				WriteResponseToConsole = false,
-				Mode = "replacefile",
+				ApplyCodeblock = true,
 				AssistantStarter = "starter2",
 				Temperature = 0.7f,
 				SystemPrompt = "prompt2",
@@ -54,7 +54,7 @@ public class SettingsTests
 			s1.Files.Should().Be(s2.Files);
 			s1.Profile.Should().Be("file2");
 			s1.WriteResponseToConsole.Should().Be(false);
-			s1.Mode.Should().Be("replacefile");
+			s1.ApplyCodeblock.Should().Be(true);
 			s1.AssistantStarter.Should().Be("starter2");
 			s1.Temperature.Should().Be(0.7f);
 			s1.SystemPrompt.Should().Be("prompt2");
@@ -76,7 +76,7 @@ public class SettingsTests
 			Files = new Files([], []),
 			Profile = "file1",
 			WriteResponseToConsole = true,
-			Mode = "find",
+			ApplyCodeblock = false,
 			AssistantStarter = "starter1",
 			Temperature = 0.5f,
 			SystemPrompt = "prompt1",
@@ -94,7 +94,7 @@ public class SettingsTests
 		s1.Files.Should().Be(s1.Files);
 		s1.Profile.Should().Be("file1");
 		s1.WriteResponseToConsole.Should().Be(true);
-		s1.Mode.Should().Be("find");
+		s1.ApplyCodeblock.Should().Be(false);
 		s1.AssistantStarter.Should().Be("starter1");
 		s1.Temperature.Should().Be(0.5f);
 		s1.SystemPrompt.Should().Be("prompt1");

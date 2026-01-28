@@ -139,7 +139,7 @@ internal static class Program
 		var targetPathOption = new Option<string>(MakeArgument(nameof(Settings.TargetPath)), "The source path where files are located");
 		var profileOption = new Option<string>("--profile", "The path to the profile file (.yaml) containing settings and system prompt");
 		var writeResponseToConsoleOption = new Option<bool>(MakeArgument(nameof(Settings.WriteResponseToConsole)), "Whether to write the model's response to the console");
-		var modeOption = new Option<string>(MakeArgument(nameof(Settings.Mode)), "The mode in which llmaid is operating");
+		var applyCodeblockOption = new Option<bool?>(MakeArgument(nameof(Settings.ApplyCodeblock)), "Extract codeblock from response and overwrite file (false = output to console)");
 		var dryRunOption = new Option<bool>(MakeArgument(nameof(Settings.DryRun)), "Simulate processing without making actual changes");
 		var assistantStarterOption = new Option<string>(MakeArgument(nameof(Settings.AssistantStarter)), "The string to start the assistant's message");
 		var temperatureOption = new Option<float?>(MakeArgument(nameof(Settings.Temperature)), "The temperature value for the model");
@@ -155,7 +155,7 @@ internal static class Program
 			targetPathOption,
 			profileOption,
 			writeResponseToConsoleOption,
-			modeOption,
+			applyCodeblockOption,
 			dryRunOption,
 			assistantStarterOption,
 			temperatureOption,
@@ -172,7 +172,7 @@ internal static class Program
 			settings.TargetPath = context.ParseResult.GetValueForOption(targetPathOption);
 			settings.Profile = context.ParseResult.GetValueForOption(profileOption);
 			settings.WriteResponseToConsole = context.ParseResult.GetValueForOption(writeResponseToConsoleOption);
-			settings.Mode = context.ParseResult.GetValueForOption(modeOption);
+			settings.ApplyCodeblock = context.ParseResult.GetValueForOption(applyCodeblockOption);
 			settings.DryRun = context.ParseResult.GetValueForOption(dryRunOption);
 			settings.AssistantStarter = context.ParseResult.GetValueForOption(assistantStarterOption);
 			settings.Temperature = context.ParseResult.GetValueForOption(temperatureOption);
@@ -310,7 +310,7 @@ internal static class Program
 			Code(responseText);
 		}
 
-		if (settings.IsReplaceMode)
+		if (settings.ApplyCodeblock ?? true)
 		{
 			var extractedCode = CodeBlockExtractor.Extract(responseText);
 			var couldExtractCode = !string.IsNullOrWhiteSpace(extractedCode);
@@ -332,7 +332,7 @@ internal static class Program
 			}
 		}
 
-		if (settings.IsFindMode && !(settings.WriteResponseToConsole ?? false))
+		if (!(settings.ApplyCodeblock ?? true) && !(settings.WriteResponseToConsole ?? false))
 			Code(responseText);
 
 		return true;
@@ -486,15 +486,10 @@ internal static class Program
 		var systemPromptTokens = CountTokens(settings.SystemPrompt ?? string.Empty);
 		var codeTokens = CountTokens(code);
 
-		if (settings.IsReplaceMode)
+		if (settings.ApplyCodeblock ?? true)
 			return (int)(systemPromptTokens + codeTokens * 1.25f);  // The LLM will extend/modify the code
-
-
-		if (settings.IsFindMode)
+		else
 			return (int)(systemPromptTokens + codeTokens * 0.25f);  // Only short responses expected
-
-
-		throw new NotSupportedException();
 	}
 
 	private static int EstimateContextLength(string originalCode, string systemPrompt, int estimatedResponseTokens)

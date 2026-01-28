@@ -3,7 +3,7 @@
 
 model: gpt-4o
 temperature: 0.3
-mode: find
+applyCodeblock: false
 maxRetries: 1
 
 files:

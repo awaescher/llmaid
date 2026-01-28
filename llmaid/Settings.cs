@@ -8,26 +8,12 @@ namespace llmaid;
 /// </summary>
 public class Settings
 {
-	private const string FIND_MODE = "find";
-	private const string REPLACEFILE_MODE = "replacefile";
 	private string? _assistantStarter;
 
 	public static Settings Empty => new();
 
 	[JsonIgnore]
 	public bool IsEmpty => string.IsNullOrWhiteSpace(Provider);
-
-	/// <summary>
-	/// Gets whether llmaid is in find mode, where file contents are not changed
-	/// </summary>
-	[JsonIgnore]
-	public bool IsFindMode => Mode == FIND_MODE;
-
-	/// <summary>
-	/// Gets whether llmaid is in replacefile method where file contents are being replaced
-	/// </summary>
-	[JsonIgnore]
-	public bool IsReplaceMode => Mode == REPLACEFILE_MODE;
 
 	/// <summary>
 	/// Gets or sets the provider name, which must be 'ollama', 'openai', 'lmstudio', or 'openai-compatible'.
@@ -81,10 +67,11 @@ public class Settings
 	public bool? WriteResponseToConsole { get; set; } = true;
 
 	/// <summary>
-	/// Gets or sets the mode in which llmaid is operating, like only finding text or replacing it
+	/// Gets or sets a value indicating whether to apply the codeblock from the model's response to the file.
+	/// If true, extracts the codeblock and overwrites the file. If false, outputs the response to console.
 	/// </summary>
-	[JsonPropertyName("mode")]
-	public string? Mode { get; set; }
+	[JsonPropertyName("applyCodeblock")]
+	public bool? ApplyCodeblock { get; set; }
 
 	/// <summary>
 	/// Gets or sets a value indicating whether the operation should be a dry run.
@@ -137,10 +124,6 @@ public class Settings
 			|| "openai-compatible".Equals(Provider, StringComparison.OrdinalIgnoreCase);
 		if (!knownProvider)
 			throw new ArgumentException("Provider has to be 'ollama', 'openai', 'lmstudio', or 'openai-compatible'.");
-
-		var knownMode = FIND_MODE.Equals(Mode, StringComparison.OrdinalIgnoreCase) || REPLACEFILE_MODE.Equals(Mode, StringComparison.OrdinalIgnoreCase);
-		if (!knownMode)
-			throw new ArgumentException("Mode has to be 'find' or 'replacefile'.");
 
 		if ((Files ?? new Files([], [])).Include?.Any() == false)
 			throw new ArgumentException("At least one file pattern must be defined.");

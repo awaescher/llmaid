@@ -76,7 +76,7 @@ Profiles are **self-contained task definitions** that include everything needed 
 model: deepseek-coder-v2:16b
 targetPath: ./src
 temperature: 0.25
-mode: replacefile
+applyCodeblock: true
 maxRetries: 1
 
 files:
@@ -102,17 +102,23 @@ systemPrompt: |
 All settings can be overridden via CLI:
 
 ```bash
-# Use a specific profile
+# Use a specific profile with dotnet run
+dotnet run --project llmaid -- --profile ./profiles/code-documenter.yaml
+
+# Use a specific profile (when running the compiled binary)
 llmaid --profile ./profiles/sql-injection-changer.yaml
 
 # Override model from profile
-llmaid --profile ./profiles/code-documenter.yaml --model gpt-4o
+dotnet run --project llmaid -- --profile ./profiles/code-documenter.yaml --model gpt-4o
 
 # Run without profile (all settings via CLI)
 llmaid --provider openai --model gpt-4o --targetPath ./src --systemPrompt "..."
 
 # Dry run to see which files would be processed
-llmaid --profile ./profiles/code-documenter.yaml --dryRun true
+dotnet run --project llmaid -- --profile ./profiles/code-documenter.yaml --dryRun true
+
+# Analyze only (output to console instead of overwriting files)
+dotnet run --project llmaid -- --profile ./profiles/nda-checker.yaml --applyCodeblock false
 ```
 
 Available arguments:
@@ -122,7 +128,7 @@ Available arguments:
 - `--model` – Model identifier
 - `--profile` – Path to YAML profile
 - `--targetPath` – Directory with files to process
-- `--mode` – `find` (report only) or `replacefile` (modify files)
+- `--applyCodeblock` – `true` extracts codeblock and overwrites file, `false` outputs response to console
 - `--temperature` – Model temperature (0-2)
 - `--systemPrompt` – System prompt text
 - `--dryRun` – Simulate without changes

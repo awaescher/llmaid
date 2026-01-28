@@ -2,7 +2,7 @@
 # Modernizes VB.NET code with short-circuit operators and other improvements
 
 temperature: 0.0
-mode: replacefile
+applyCodeblock: true
 model: qwen2.5-coder:32b
 assistantStarter: ""
 maxRetries: 1
