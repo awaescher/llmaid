@@ -280,9 +280,9 @@ internal static class Program
 		var options = new ChatOptions { Temperature = settings.Temperature }
 		    .AddOllamaOption(OllamaOption.NumCtx, Math.Max(estimatedContextLength, settings.OllamaMinNumCtx)); // use a minimum context length for the Ollama provider to prevent unnecessary model reloads
 
-		LogVerboseInfo($"Input tokens: {inputTokens} (system: {systemPromptTokens}, user: {userPromptTokens})");
-		LogVerboseInfo($"Estimated output tokens: {estimatedResponseTokens}");
-		LogVerboseInfo($"Estimated context length: {estimatedContextLength} tokens");
+		LogVerboseDetail($"Input tokens: {inputTokens} (system: {systemPromptTokens}, user: {userPromptTokens})");
+		LogVerboseDetail($"Estimated output tokens: {estimatedResponseTokens}");
+		LogVerboseDetail($"Estimated context length: {estimatedContextLength} tokens");
 
 		var generatedCodeBuilder = new StringBuilder();
 
