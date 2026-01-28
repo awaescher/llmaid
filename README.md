@@ -1,6 +1,12 @@
 # Large Language Maid
 
+Throw files against LLMs.
+
 llmaid is a command-line tool designed to automate the process of AI supported file changes using large language models. It reads source code files, sends them to Ollama, LM Studio, or any OpenAI-compatible API, and writes back the models answers. The tool is highly configurable and supports every kind of text-based input file.
+
+> But there is GitHub Copilot, Cursor, Claude Code, OpenCode and so many more. Isn't llmaid outdated?
+
+Yes. But it serves a slightly different use-case. These partly autonomous agents are amazing and make sense. But they cannot be used to fix typos or add documentation in every single code file of a repository. These tools work in a different way and need to minimize their context while navigating through your codebase. llmaid is different: Every file is a new conversation. While there is no autonomous intelligence, it can review or edit every file in total based on your instructions. This is handy to find things in your codebase you could not search with RegEx, for example. The feature of writing the LLM response back also enables batch-processing of every single file in the codebase, like "fix all typos".
 
 > [!NOTE]
 > 1. Paid services such as ChatGPT can cause high API costs if they are used with many files. Double check your jobs.
