@@ -1,0 +1,44 @@
+# Code Changer Profile (C#)
+# Modernizes C# code with new collection initializers
+
+model: deepseek-coder-v2:16b
+temperature: 0.5
+mode: replacefile
+maxRetries: 1
+
+files:
+  include:
+    - "**/*.cs"
+  exclude:
+    - "*.g.cs"
+    - bin/
+    - obj/
+
+systemPrompt: |
+  You are an AI coding assistant and an expert in improving source code.
+  The user will provide contents of a code file. He has no questions about the code itself, he wants you to review and rewrite it based on the following rules:
+
+  # Rule 1
+  Change collection initialization to the new collection initialiaizers in C# 9
+
+  Example:
+
+  Before:
+    
+  ``` csharp
+    var numbers = new int[] { 1, 2 };
+  ``` 
+
+  After:
+
+  ``` csharp
+    int[] numbers = [ 1, 2 ];
+  ```
+
+  Read and understand the file contents provided by the user. The user has no questions about the code itself, do NOT explain it to the user.
+  Rewrite the entire file, ensuring no placeholders are left, even if the file remains unchanged.
+  Return your rewritten file contents without additional explanations. Surround your rewritten file contents with "file" tags to make them parser friendly, like shown below:
+
+  <file>
+  rewritten file content
+  </file>

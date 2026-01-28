@@ -36,4 +36,16 @@ public interface IFileLoader
 	IEnumerable<string> Get(string path, Files files);
 }
 
-public record Files(string[] Include, string[] Exclude);
+public class Files
+{
+	public string[] Include { get; set; } = [];
+	public string[] Exclude { get; set; } = [];
+
+	public Files() { }
+
+	public Files(string[] include, string[] exclude)
+	{
+		Include = include;
+		Exclude = exclude;
+	}
+}

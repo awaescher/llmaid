@@ -18,7 +18,7 @@ public class SettingsTests
 				Model = "model1",
 				TargetPath = "path1",
 				Files = new Files([], []),
-				DefinitionFile = "file1",
+				Profile = "file1",
 				WriteResponseToConsole = true,
 				Mode = "find",
 				AssistantStarter = "starter1",
@@ -35,7 +35,7 @@ public class SettingsTests
 				Model = "model2",
 				TargetPath = "path2",
 				Files = new Files([], []),
-				DefinitionFile = "file2",
+				Profile = "file2",
 				WriteResponseToConsole = false,
 				Mode = "replacefile",
 				AssistantStarter = "starter2",
@@ -52,7 +52,7 @@ public class SettingsTests
 			s1.Model.Should().Be("model2");
 			s1.TargetPath.Should().Be("path2");
 			s1.Files.Should().Be(s2.Files);
-			s1.DefinitionFile.Should().Be("file2");
+			s1.Profile.Should().Be("file2");
 			s1.WriteResponseToConsole.Should().Be(false);
 			s1.Mode.Should().Be("replacefile");
 			s1.AssistantStarter.Should().Be("starter2");
@@ -74,7 +74,7 @@ public class SettingsTests
 			Model = "model1",
 			TargetPath = "path1",
 			Files = new Files([], []),
-			DefinitionFile = "file1",
+			Profile = "file1",
 			WriteResponseToConsole = true,
 			Mode = "find",
 			AssistantStarter = "starter1",
@@ -92,7 +92,7 @@ public class SettingsTests
 		s1.Model.Should().Be("model1");
 		s1.TargetPath.Should().Be("path1");
 		s1.Files.Should().Be(s1.Files);
-		s1.DefinitionFile.Should().Be("file1");
+		s1.Profile.Should().Be("file1");
 		s1.WriteResponseToConsole.Should().Be(true);
 		s1.Mode.Should().Be("find");
 		s1.AssistantStarter.Should().Be("starter1");

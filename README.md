@@ -15,7 +15,7 @@ llmaid will run through every file in a path you specify and rewrite, analyse or
 > [!NOTE]
 > The quality mainly depends on the model you want to use. ChatGPT works great, but I have also had good results with medium sized local models like `mistral-small:22b` and `qwen2.5:32b`.
 
-This repository provides a [few system prompts](/prompts), for example:
+This repository provides a [few profile files](/profiles), for example:
 
 ### Documenting code
 With this prompt, llmaid will scan and rewrite each code file and generate missing summaries, fix typos, remove wrong comments and much more:
@@ -28,7 +28,7 @@ This prompt will output one json code block for each file. There it lists findin
 
 ## Prerequisites
 
-- [.NET 8.0 SDK](https://dotnet.microsoft.com/download)
+- [.NET 9.0 SDK](https://dotnet.microsoft.com/download)
 - An Ollama instance, LM Studio, or an OpenAI-compatible API including api key
 
 ## Installation
@@ -37,31 +37,96 @@ This prompt will output one json code block for each file. There it lists findin
 git clone https://github.com/awaescher/llmaid
 cd llmaid
 
-# edit ./llmaid/appsettings.json to your needs
-# edit ./systemprompt.txt to your needs
+# edit ./llmaid/appsettings.json for provider settings
+# edit or create a profile in ./profiles/ for task-specific settings
 
 dotnet run --project llmaid
 ```
 
 ## Configuration
 
-Change the `appsettings.json` file in the root directory to your needs:
+llmaid uses a **layered configuration system** where each layer can override the previous:
+
+1. **appsettings.json** – Connection settings only (provider, URI, API key)
+2. **Profile file (.yaml)** – Complete task configuration (model, paths, files, system prompt)
+3. **Command line arguments** – Runtime overrides (highest priority)
+
+This means you can prepare self-contained profiles for different tasks and still override individual settings via CLI.
+
+### appsettings.json (Connection Settings)
+
+This file only contains your LLM provider connection settings:
 
 ```json
 {
-  "Provider": "lmstudio",                      // ollama, openai, lmstudio, or openai-compatible
-  "Uri": "http://localhost:1234/v1",           // Ollama: http://localhost:11434, LM Studio: http://localhost:1234/v1, OpenAI: https://api.openai.com/v1
-  "ApiKey": ""                                 // not required for Ollama or LM Studio
-  "Model": "deepseek-coder-v2:16b",            // the model to use
-  "Mode": "replacefile",                       // "replacefile" tries to rewrite files while "find" just writes console outputs - both depending on the system prompt
-  "PromptFile": "./systemprompt.txt",          // the system prompt to prime the model
-  "SourcePath": "./testcode",                  // the path to look for files to change
-  "FilePatterns": [ "*.cs", "*.js" ],          // the file types to change
-  "Temperature": 0.7,                          // the models temperature (0 precise to 1 creative)
-  "WriteCodeToConsole": true,                  // whether or not the models response should be shown in the console
-  "ReplaceFiles": true                         // whether or not the files should be replaced with the model's response
+  "Provider": "lmstudio",
+  "Uri": "http://localhost:1234/v1",
+  "ApiKey": "",
+  "WriteResponseToConsole": true
 }
 ```
+
+### Profile Files (.yaml)
+
+Profiles are **self-contained task definitions** that include everything needed to run a specific job: model, target path, file patterns, and system prompt.
+
+```yaml
+# profiles/code-documenter.yaml
+
+model: deepseek-coder-v2:16b
+targetPath: ./src
+temperature: 0.25
+mode: replacefile
+maxRetries: 1
+
+files:
+  include:
+    - "**/*.{cs,vb,js,ts}"
+  exclude:
+    - bin/
+    - obj/
+
+systemPrompt: |
+  You are an AI documentation assistant.
+  The user will provide a code snippet. Review and improve its documentation:
+  
+  - Add missing summaries for public members
+  - Fix typos in comments
+  - Do NOT change the executable code
+  
+  Return the entire file in a markdown code block.
+```
+
+### Command Line Arguments
+
+All settings can be overridden via CLI:
+
+```bash
+# Use a specific profile
+llmaid --profile ./profiles/sql-injection-changer.yaml
+
+# Override model from profile
+llmaid --profile ./profiles/code-documenter.yaml --model gpt-4o
+
+# Run without profile (all settings via CLI)
+llmaid --provider openai --model gpt-4o --targetPath ./src --systemPrompt "..."
+
+# Dry run to see which files would be processed
+llmaid --profile ./profiles/code-documenter.yaml --dryRun true
+```
+
+Available arguments:
+- `--provider` – ollama, openai, lmstudio, openai-compatible
+- `--uri` – API endpoint URL
+- `--apiKey` – API key (if required)
+- `--model` – Model identifier
+- `--profile` – Path to YAML profile
+- `--targetPath` – Directory with files to process
+- `--mode` – `find` (report only) or `replacefile` (modify files)
+- `--temperature` – Model temperature (0-2)
+- `--systemPrompt` – System prompt text
+- `--dryRun` – Simulate without changes
+- `--maxRetries` – Retry count on failures
 
 ### Supported Providers
 

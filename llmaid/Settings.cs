@@ -1,7 +1,10 @@
+using System.Text.Json.Serialization;
+
 namespace llmaid;
 
 /// <summary>
 /// Represents the settings required for configuring the application.
+/// Settings can be loaded from appsettings.json, profile files (.yaml), or command line arguments.
 /// </summary>
 public class Settings
 {
@@ -11,16 +14,19 @@ public class Settings
 
 	public static Settings Empty => new();
 
+	[JsonIgnore]
 	public bool IsEmpty => string.IsNullOrWhiteSpace(Provider);
 
 	/// <summary>
 	/// Gets whether llmaid is in find mode, where file contents are not changed
 	/// </summary>
+	[JsonIgnore]
 	public bool IsFindMode => Mode == FIND_MODE;
 
 	/// <summary>
 	/// Gets whether llmaid is in replacefile method where file contents are being replaced
 	/// </summary>
+	[JsonIgnore]
 	public bool IsReplaceMode => Mode == REPLACEFILE_MODE;
 
 	/// <summary>
@@ -28,59 +34,70 @@ public class Settings
 	/// Use 'lmstudio' for LM Studio's local API (default: http://localhost:1234/v1).
 	/// Use 'openai-compatible' for any other OpenAI-compatible API endpoints.
 	/// </summary>
+	[JsonPropertyName("provider")]
 	public string? Provider { get; set; }
 
 	/// <summary>
 	/// Gets or sets the API key used for authentication with the provider.
 	/// Not required for Ollama or LM Studio (leave empty or use any placeholder).
 	/// </summary>
+	[JsonPropertyName("apiKey")]
 	public string? ApiKey { get; set; }
 
 	/// <summary>
 	/// Gets or sets the URI endpoint for the API.
 	/// </summary>
+	[JsonPropertyName("uri")]
 	public Uri? Uri { get; set; }
 
 	/// <summary>
 	/// Gets or sets the model name to be used.
 	/// </summary>
+	[JsonPropertyName("model")]
 	public string? Model { get; set; }
 
 	/// <summary>
 	/// Gets or sets the source path where files are located that should be processed.
 	/// </summary>
+	[JsonPropertyName("targetPath")]
 	public string? TargetPath { get; set; }
 
 	/// <summary>
 	/// Gets or sets the file glob patterns to search for.
 	/// </summary>
+	[JsonPropertyName("files")]
 	public Files? Files { get; set; }
 
 	/// <summary>
-	/// Gets or sets the path to the file defining the system prompt.
+	/// Gets or sets the path to the profile file (.yaml) containing settings and system prompt.
 	/// </summary>
-	public string? DefinitionFile { get; set; }
+	[JsonPropertyName("profile")]
+	public string? Profile { get; set; }
 
 	/// <summary>
 	/// Gets or sets a value indicating whether to write the models response to the console. Defaults to true.
 	/// </summary>
+	[JsonPropertyName("writeResponseToConsole")]
 	public bool? WriteResponseToConsole { get; set; } = true;
 
 	/// <summary>
 	/// Gets or sets the mode in which llmaid is operating, like only finding text or replacing it
 	/// </summary>
+	[JsonPropertyName("mode")]
 	public string? Mode { get; set; }
 
 	/// <summary>
 	/// Gets or sets a value indicating whether the operation should be a dry run.
 	/// If set to <c>true</c>, the operation will simulate the actions without making any actual changes.
 	/// </summary>
+	[JsonPropertyName("dryRun")]
 	public bool DryRun { get; set; }
 
 	/// <summary>
 	/// Gets or sets the string that should be used to start the assistant's message.
 	/// Can be used to make the model think it started with the a code block already to prevent it from talking about it.
 	/// </summary>
+	[JsonPropertyName("assistantStarter")]
 	public string? AssistantStarter
 	{
 		get => _assistantStarter?.Replace("\\n", Environment.NewLine);
@@ -90,22 +107,26 @@ public class Settings
 	/// <summary>
 	/// Gets or sets the temperature value for the model.
 	/// </summary>
+	[JsonPropertyName("temperature")]
 	public float? Temperature { get; set; }
 
 	/// <summary>
 	/// Gets or sets the system prompt to be used with the model
 	/// </summary>
+	[JsonPropertyName("systemPrompt")]
 	public string? SystemPrompt { get; set; }
 
 	/// <summary>
 	/// Gets or sets the maximum number of retries of a reponse could not be processed
 	/// </summary>
+	[JsonPropertyName("maxRetries")]
 	public int? MaxRetries { get; set; }
 
 	/// <summary>
 	/// Validates the current arguments, ensuring all required fields are properly set.
 	/// </summary>
-	public Task Validate()
+	/// <param name="requireProfile">If true, validates that a profile file exists. Set to false when running purely from CLI.</param>
+	public Task Validate(bool requireProfile = false)
 	{
 		if (string.IsNullOrEmpty(Uri?.AbsolutePath))
 			throw new ArgumentException("Uri has to be defined.");
@@ -130,8 +151,11 @@ public class Settings
 		if (string.IsNullOrEmpty(Model))
 			throw new ArgumentException("Model has to be defined.");
 
-		if (string.IsNullOrWhiteSpace(DefinitionFile) || !File.Exists(DefinitionFile))
-			throw new FileNotFoundException($"Prompt file '{DefinitionFile}' does not exist.");
+		if (requireProfile && (string.IsNullOrWhiteSpace(Profile) || !File.Exists(Profile)))
+			throw new FileNotFoundException($"Profile file '{Profile}' does not exist.");
+
+		if (string.IsNullOrWhiteSpace(SystemPrompt))
+			throw new ArgumentException("System prompt has to be defined (either via --systemPrompt or in the profile file).");
 
 		return Task.CompletedTask;
 	}

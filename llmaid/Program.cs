@@ -28,7 +28,10 @@ internal static class Program
 		using var cancellationTokenSource = new CancellationTokenSource();
 		var cancellationToken = cancellationTokenSource.Token;
 
-		// settings 1: appsettings.json
+		// Settings loading order (each layer can override previous values):
+		// 1. appsettings.json - base configuration
+		// 2. Profile file (.yaml) - task-specific settings and system prompt
+		// 3. Command line arguments - runtime overrides (highest priority)
 
 		var config = new ConfigurationBuilder()
 			.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
@@ -36,14 +39,21 @@ internal static class Program
 			.AddJsonFile($"appsettings.{(Debugger.IsAttached ? "VisualStudio" : "Production")}.json", optional: true)
 			.Build();
 
-		// settings 2: override values from command line
-		// settings 3: override values from <OverrideSettings> in definition file
-
+		// Layer 1: Load base settings from appsettings.json
 		var settings = config.Get<Settings>() ?? throw new ArgumentException("Settings could not be parsed.");
-		settings.OverrideWith(ParseCommandLine(args));
-		settings.OverrideWith(await ParseOverridesFromDefinitionFile(settings.DefinitionFile ?? string.Empty));
+		
+		// Parse CLI args early to get profile path (but don't apply other CLI args yet)
+		var cliSettings = ParseCommandLine(args);
+		var profilePath = cliSettings.Profile ?? settings.Profile;
+		
+		// Layer 2: Override with profile file settings (if provided)
+		if (!string.IsNullOrWhiteSpace(profilePath))
+			settings.OverrideWith(await ParseProfileFile(profilePath));
+		
+		// Layer 3: Override with CLI arguments (highest priority)
+		settings.OverrideWith(cliSettings);
 
-		await settings.Validate();
+		await settings.Validate(requireProfile: false);
 
 		Log.Logger = new LoggerConfiguration()
 			.WriteTo.File($"./logs/{DateTime.Now:yyyy-MM-dd-hh-mm-ss}.log")
@@ -99,39 +109,24 @@ internal static class Program
 		Information($"{errors} error{(errors == 1 ? "" : "s")} occured.");
 	}
 
-	private static async Task<Settings> ParseOverridesFromDefinitionFile(string definitionFile)
+	/// <summary>
+	/// Parses a profile file (.yaml) containing settings and system prompt.
+	/// </summary>
+	private static async Task<Settings> ParseProfileFile(string profileFile)
 	{
-		const string XML_TAG = "OverrideSettings";
+		if (!File.Exists(profileFile))
+			throw new FileNotFoundException($"Profile file '{profileFile}' does not exist.");
 
-		var content = await File.ReadAllTextAsync(definitionFile).ConfigureAwait(false);
+		var content = await File.ReadAllTextAsync(profileFile).ConfigureAwait(false);
 
-		var settingsBlock = CodeBlockExtractor.ExtractXml(content, XML_TAG) ?? string.Empty;
-
-		Settings settings;
-		if (settingsBlock.Trim().Any())
-			settings = JsonSerializer.Deserialize<Settings>(settingsBlock, new JsonSerializerOptions { ReadCommentHandling = JsonCommentHandling.Skip }) ?? Settings.Empty;
-		else
-			settings = Settings.Empty;
-
-		// Extract the system prompt: everything after </OverrideSettings>
-
-		var closingTag = $"</{XML_TAG}>";
-		var closingTagIndex = content.IndexOf(closingTag, StringComparison.OrdinalIgnoreCase);
-		if (closingTagIndex >= 0)
-		{
-			var systemPrompt = content[(closingTagIndex + closingTag.Length)..].Trim();
-			if (!string.IsNullOrWhiteSpace(systemPrompt))
-				settings.SystemPrompt = systemPrompt;
-		}
-		else if (string.IsNullOrWhiteSpace(settingsBlock))
-		{
-			// No OverrideSettings found - the entire file is the system prompt
-
-			settings.SystemPrompt = content.Trim();
-		}
-
-		return settings;
+		var deserializer = new YamlDotNet.Serialization.DeserializerBuilder()
+			.WithNamingConvention(YamlDotNet.Serialization.NamingConventions.CamelCaseNamingConvention.Instance)
+			.IgnoreUnmatchedProperties()
+			.Build();
+		
+		return deserializer.Deserialize<Settings>(content) ?? Settings.Empty;
 	}
+	
 	public static Settings ParseCommandLine(string[] args)
 	{
 		static string MakeArgument(string value) => $"--{char.ToLowerInvariant(value[0])}{value[1..]}";
@@ -142,9 +137,10 @@ internal static class Program
 		var uriOption = new Option<string>(MakeArgument(nameof(Settings.Uri)), "The URI endpoint for the API");
 		var modelOption = new Option<string>(MakeArgument(nameof(Settings.Model)), "The model name to be used");
 		var targetPathOption = new Option<string>(MakeArgument(nameof(Settings.TargetPath)), "The source path where files are located");
-		var definitionFileOption = new Option<string>(MakeArgument(nameof(Settings.DefinitionFile)), "The path to the file defining the system prompt");
+		var profileOption = new Option<string>("--profile", "The path to the profile file (.yaml) containing settings and system prompt");
 		var writeResponseToConsoleOption = new Option<bool>(MakeArgument(nameof(Settings.WriteResponseToConsole)), "Whether to write the model's response to the console");
 		var modeOption = new Option<string>(MakeArgument(nameof(Settings.Mode)), "The mode in which llmaid is operating");
+		var dryRunOption = new Option<bool>(MakeArgument(nameof(Settings.DryRun)), "Simulate processing without making actual changes");
 		var assistantStarterOption = new Option<string>(MakeArgument(nameof(Settings.AssistantStarter)), "The string to start the assistant's message");
 		var temperatureOption = new Option<float?>(MakeArgument(nameof(Settings.Temperature)), "The temperature value for the model");
 		var systemPromptOption = new Option<string>(MakeArgument(nameof(Settings.SystemPrompt)), "The system prompt to be used with the model");
@@ -157,9 +153,10 @@ internal static class Program
 			uriOption,
 			modelOption,
 			targetPathOption,
-			definitionFileOption,
+			profileOption,
 			writeResponseToConsoleOption,
 			modeOption,
+			dryRunOption,
 			assistantStarterOption,
 			temperatureOption,
 			systemPromptOption,
@@ -173,9 +170,10 @@ internal static class Program
 			settings.Uri = context.ParseResult.GetValueForOption(uriOption) is string uri && !string.IsNullOrWhiteSpace(uri) ? new Uri(uri) : null;
 			settings.Model = context.ParseResult.GetValueForOption(modelOption);
 			settings.TargetPath = context.ParseResult.GetValueForOption(targetPathOption);
-			settings.DefinitionFile = context.ParseResult.GetValueForOption(definitionFileOption);
+			settings.Profile = context.ParseResult.GetValueForOption(profileOption);
 			settings.WriteResponseToConsole = context.ParseResult.GetValueForOption(writeResponseToConsoleOption);
 			settings.Mode = context.ParseResult.GetValueForOption(modeOption);
+			settings.DryRun = context.ParseResult.GetValueForOption(dryRunOption);
 			settings.AssistantStarter = context.ParseResult.GetValueForOption(assistantStarterOption);
 			settings.Temperature = context.ParseResult.GetValueForOption(temperatureOption);
 			settings.SystemPrompt = context.ParseResult.GetValueForOption(systemPromptOption);
