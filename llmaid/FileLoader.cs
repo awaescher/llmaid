@@ -6,10 +6,9 @@ public class FileLoader : IFileLoader
 {
 	public string[] GetAll(string path, Files files)
 	{
-		return Get(path, files)
+		return [.. Get(path, files)
 			.Distinct()
-			.Order()
-			.ToArray();
+			.Order()];
 	}
 
 	public IEnumerable<string> Get(string path, Files files)

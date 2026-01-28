@@ -22,7 +22,7 @@ public class Settings
 	/// </summary>
 	[JsonPropertyName("provider")]
 	public string? Provider { get; set; }
-	
+
 	/// <summary>
 	/// Minimum context length for the Ollama provider to prevent model unnecessary model reloads
 	/// </summary>
