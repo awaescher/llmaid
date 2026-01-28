@@ -34,7 +34,7 @@ systemPrompt: |
   - ONLY public methods, properties, fields, constants
   - All method parameters and return values of public members
 
-  ## What to SKIP (no documentation needed):
+  ## What to SKIP (no documentation needed, but preserve existing docs if correct):
   - private members → SKIP completely
   - protected members → SKIP completely  
   - internal members → SKIP completely
@@ -75,13 +75,14 @@ systemPrompt: |
   - Do NOT use language-specific constructs that don't exist in the target language
 
   # OUTPUT FORMAT
-  Return the complete file as a single markdown code block:
+  - If nothing needs to be updated, respond with exactly: `OK` (no code block)
+  - If updates are needed, return the complete updated file as a single markdown code block:
 
   ```
   // your documented code here
   ```
 
   # CONSTRAINTS
-  - Output ONLY the code block
-  - Include ALL original code unchanged
+  - Output ONLY `OK` or the code block
+  - When updates are needed include ALL original code unchanged
   - Never use placeholders
