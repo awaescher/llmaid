@@ -110,6 +110,14 @@ public class Settings
 	public int? MaxRetries { get; set; }
 
 	/// <summary>
+	/// Gets or sets a value indicating whether to output verbose information.
+	/// When false (default), only file names and responses are shown for easy processing.
+	/// When true, detailed information about tokens, timing, and settings is displayed.
+	/// </summary>
+	[JsonPropertyName("verbose")]
+	public bool? Verbose { get; set; }
+
+	/// <summary>
 	/// Validates the current arguments, ensuring all required fields are properly set.
 	/// </summary>
 	/// <param name="requireProfile">If true, validates that a profile file exists. Set to false when running purely from CLI.</param>

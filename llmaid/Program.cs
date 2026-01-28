@@ -18,6 +18,7 @@ internal static class Program
 	internal static IChatClient ChatClient { get; set; } = null!;
 	internal static int FileCount { get; set; }
 	internal static int CurrentFileIndex { get; set; }
+	internal static bool Verbose { get; set; }
 
 	// Tokenizer for accurate token estimation (o200k_base is the standard for GPT-4o and similar models)
 
@@ -55,6 +56,8 @@ internal static class Program
 
 		await settings.Validate(requireProfile: false);
 
+		Verbose = settings.Verbose ?? false;
+
 		Log.Logger = new LoggerConfiguration()
 			.WriteTo.File($"./logs/{DateTime.Now:yyyy-MM-dd-hh-mm-ss}.log")
 			.MinimumLevel.Verbose()
@@ -62,20 +65,22 @@ internal static class Program
 
 		ChatClient = CreateChatClient(settings);
 
-		Information($"Running {settings.Model} ({settings.Uri}) against {settings.TargetPath}." + Environment.NewLine);
-		Detail(JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true }));
+		LogVerboseInfo($"Running {settings.Model} ({settings.Uri}) against {settings.TargetPath}." + Environment.NewLine);
+		LogVerboseDetail(JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true }));
 
 		var loader = new FileLoader();
 		var totalStopWatch = Stopwatch.StartNew();
 
-		Information("Locating all files ..." + Environment.NewLine);
+		LogVerboseInfo("Locating all files ..." + Environment.NewLine);
 		var files = loader.GetAll(settings.TargetPath ?? string.Empty, settings.Files ?? new Files([], []));
 		FileCount = files.Length;
 
 		var errors = 0;
 		foreach (var file in files)
 		{
-			Information($"[{++CurrentFileIndex}/{FileCount}] {file} ({GetFileSizeString(file)})");
+			CurrentFileIndex++;
+			var fileHeader = $"[{CurrentFileIndex}/{FileCount}] {file} ({GetFileSizeString(file)})";
+			LogFileHeader(fileHeader);
 
 			var success = false;
 			var attempt = 0;
@@ -83,7 +88,7 @@ internal static class Program
 			{
 				attempt++;
 				if (attempt > 1)
-					Detail("Attempt " + attempt);
+					LogVerboseDetail("Attempt " + attempt);
 				var stopwatch = Stopwatch.StartNew();
 				try
 				{
@@ -97,7 +102,7 @@ internal static class Program
 				{
 					stopwatch.Stop();
 					if (!settings.DryRun)
-						Detail($"{stopwatch.Elapsed}{Environment.NewLine}");
+						LogVerboseDetail($"{stopwatch.Elapsed}{Environment.NewLine}");
 				}
 			} while (!success && attempt < settings.MaxRetries);
 
@@ -105,8 +110,8 @@ internal static class Program
 				errors++;
 		}
 
-		Information("Finished in " + totalStopWatch.Elapsed.ToString());
-		Information($"{errors} error{(errors == 1 ? "" : "s")} occured.");
+		LogVerboseInfo("Finished in " + totalStopWatch.Elapsed.ToString());
+		LogVerboseInfo($"{errors} error{(errors == 1 ? "" : "s")} occured.");
 	}
 
 	/// <summary>
@@ -140,11 +145,14 @@ internal static class Program
 		var profileOption = new Option<string>("--profile", "The path to the profile file (.yaml) containing settings and system prompt");
 		var writeResponseToConsoleOption = new Option<bool>(MakeArgument(nameof(Settings.WriteResponseToConsole)), "Whether to write the model's response to the console");
 		var applyCodeblockOption = new Option<bool?>(MakeArgument(nameof(Settings.ApplyCodeblock)), "Extract codeblock from response and overwrite file (false = output to console)");
+		applyCodeblockOption.Arity = ArgumentArity.ZeroOrOne;
 		var dryRunOption = new Option<bool>(MakeArgument(nameof(Settings.DryRun)), "Simulate processing without making actual changes");
 		var assistantStarterOption = new Option<string>(MakeArgument(nameof(Settings.AssistantStarter)), "The string to start the assistant's message");
 		var temperatureOption = new Option<float?>(MakeArgument(nameof(Settings.Temperature)), "The temperature value for the model");
 		var systemPromptOption = new Option<string>(MakeArgument(nameof(Settings.SystemPrompt)), "The system prompt to be used with the model");
 		var maxRetriesOption = new Option<int>(MakeArgument(nameof(Settings.MaxRetries)), "The maximum number of retries if a response could not be processed");
+		var verboseOption = new Option<bool?>(MakeArgument(nameof(Settings.Verbose)), "Show detailed output including tokens and timing information");
+		verboseOption.Arity = ArgumentArity.ZeroOrOne;
 
 		var rootCommand = new RootCommand
 		{
@@ -160,7 +168,8 @@ internal static class Program
 			assistantStarterOption,
 			temperatureOption,
 			systemPromptOption,
-			maxRetriesOption
+			maxRetriesOption,
+			verboseOption
 		};
 
 		rootCommand.SetHandler(context =>
@@ -172,12 +181,21 @@ internal static class Program
 			settings.TargetPath = context.ParseResult.GetValueForOption(targetPathOption);
 			settings.Profile = context.ParseResult.GetValueForOption(profileOption);
 			settings.WriteResponseToConsole = context.ParseResult.GetValueForOption(writeResponseToConsoleOption);
-			settings.ApplyCodeblock = context.ParseResult.GetValueForOption(applyCodeblockOption);
+
+			// Handle toggle flags: when specified without value, they default to true
+			if (context.ParseResult.FindResultFor(applyCodeblockOption) is not null)
+				settings.ApplyCodeblock = context.ParseResult.GetValueForOption(applyCodeblockOption) ?? true;
+
 			settings.DryRun = context.ParseResult.GetValueForOption(dryRunOption);
 			settings.AssistantStarter = context.ParseResult.GetValueForOption(assistantStarterOption);
 			settings.Temperature = context.ParseResult.GetValueForOption(temperatureOption);
 			settings.SystemPrompt = context.ParseResult.GetValueForOption(systemPromptOption);
 			settings.MaxRetries = context.ParseResult.GetValueForOption(maxRetriesOption);
+
+			// Handle toggle flags: when specified without value, they default to true
+			if (context.ParseResult.FindResultFor(verboseOption) is not null)
+				settings.Verbose = context.ParseResult.GetValueForOption(verboseOption) ?? true;
+
 			context.ExitCode = 0;
 		});
 
@@ -208,13 +226,13 @@ internal static class Program
 		}
 		catch (Exception ex)
 		{
-			Error($"Could not read {file}: {ex.Message}");
+			LogError($"Could not read {file}: {ex.Message}");
 			return false;
 		}
 
 		if (originalCode.Length < 1)
 		{
-			Warning($"Skipped file {file}: No content.");
+			LogWarning($"Skipped file {file}: No content.");
 			return false;
 		}
 
@@ -250,9 +268,9 @@ internal static class Program
 		var options = new ChatOptions { Temperature = settings.Temperature }
 			.AddOllamaOption(OllamaOption.NumCtx, estimatedContextLength);
 
-		Information($"Input tokens: {inputTokens} (system: {systemPromptTokens}, user: {userPromptTokens})");
-		Information($"Estimated output tokens: {estimatedResponseTokens}");
-		Information($"Estimated context length: {estimatedContextLength} tokens");
+		LogVerboseInfo($"Input tokens: {inputTokens} (system: {systemPromptTokens}, user: {userPromptTokens})");
+		LogVerboseInfo($"Estimated output tokens: {estimatedResponseTokens}");
+		LogVerboseInfo($"Estimated context length: {estimatedContextLength} tokens");
 
 		var generatedCodeBuilder = new StringBuilder();
 
@@ -301,13 +319,13 @@ internal static class Program
 		var responseText = response?.Text ?? "";
 		var responseTokens = CountTokens(responseText);
 		var totalTokens = inputTokens + responseTokens;
-		Detail($"Actual output: {responseTokens} tokens (estimated: {estimatedResponseTokens})");
-		Detail($"Total: {totalTokens} tokens (input: {inputTokens} + output: {responseTokens})");
+		LogVerboseDetail($"Actual output: {responseTokens} tokens (estimated: {estimatedResponseTokens})");
+		LogVerboseDetail($"Total: {totalTokens} tokens (input: {inputTokens} + output: {responseTokens})");
 
 		if (settings.WriteResponseToConsole ?? false)
 		{
-			Information("");
-			Code(responseText);
+			LogVerboseInfo("");
+			LogCode(responseText);
 		}
 
 		if (settings.ApplyCodeblock ?? true)
@@ -316,24 +334,29 @@ internal static class Program
 			var couldExtractCode = !string.IsNullOrWhiteSpace(extractedCode);
 			if (couldExtractCode)
 			{
-				await File.WriteAllTextAsync(file, extractedCode, cancellationToken);
+				var bytes = Encoding.UTF8.GetBytes(extractedCode);
+				await File.WriteAllBytesAsync(file, bytes, cancellationToken);
+				// Standard output: result in cyan
+				LogResult($"{bytes.Length} bytes written");
 			}
 			else
 			{
-				var wasOkay = responseText.Trim().EndsWith("[OK]", StringComparison.OrdinalIgnoreCase);
+				var wasOkay = responseText.Trim().EndsWith("[OK]", StringComparison.OrdinalIgnoreCase) || responseText.Trim().Equals("OK", StringComparison.OrdinalIgnoreCase);
 				if (wasOkay)
 				{
-					Information("The model returned 'OK' signaling that no changes were required.");
+					LogResult("no changes");
 					return true;
 				}
 
-				Error("Could not extract code from the model's response. It seems that there's no valid code block.");
+				LogError("Could not extract code from the model's response. It seems that there's no valid code block.");
 				return false;
 			}
 		}
-
-		if (!(settings.ApplyCodeblock ?? true) && !(settings.WriteResponseToConsole ?? false))
-			Code(responseText);
+		else
+		{
+			// Standard output: response in cyan
+			LogResult(responseText);
+		}
 
 		return true;
 	}
@@ -364,34 +387,60 @@ internal static class Program
 		}
 	}
 
-	private static void Information(string message)
+	/// <summary>
+	/// Writes the file header (always visible, in cyan).
+	/// </summary>
+	private static void LogFileHeader(string message)
 	{
 		WriteLine("white", message);
 		Log.Information(message);
 	}
 
-	private static void Warning(string message)
+	/// <summary>
+	/// Writes the result output (always visible, in cyan).
+	/// </summary>
+	private static void LogResult(string message)
+	{
+		WriteLine("cyan", message);
+		Log.Information(message);
+	}
+
+	/// <summary>
+	/// Writes informational output only in verbose mode.
+	/// </summary>
+	private static void LogVerboseInfo(string message)
+	{
+		if (Verbose)
+			WriteLine("white", message);
+		Log.Information(message);
+	}
+
+	/// <summary>
+	/// Writes detailed output only in verbose mode.
+	/// </summary>
+	private static void LogVerboseDetail(string message)
+	{
+		if (Verbose)
+			WriteLine("gray", message);
+		Log.Verbose(message);
+	}
+
+	private static void LogWarning(string message)
 	{
 		WriteLine("yellow", message);
 		Log.Warning(message);
 	}
 
-	private static void Error(string message)
+	private static void LogError(string message)
 	{
 		WriteLine("red", message);
 		Log.Error(message);
 	}
 
-	private static void Code(string message)
+	private static void LogCode(string message)
 	{
 		WriteLine("cyan", message);
 		Log.Debug(Environment.NewLine + message);
-	}
-
-	private static void Detail(string message)
-	{
-		WriteLine("gray", message);
-		Log.Verbose(message);
 	}
 
 	private static void WriteLine(string color, string message)

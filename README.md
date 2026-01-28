@@ -28,7 +28,7 @@ This prompt will output one json code block for each file. There it lists findin
 
 ## Prerequisites
 
-- [.NET 9.0 SDK](https://dotnet.microsoft.com/download)
+- [.NET 10.0 SDK](https://dotnet.microsoft.com/download)
 - An Ollama instance, LM Studio, or an OpenAI-compatible API including api key
 
 ## Installation
@@ -108,17 +108,14 @@ dotnet run --project llmaid -- --profile ./profiles/code-documenter.yaml
 # Use a specific profile (when running the compiled binary)
 llmaid --profile ./profiles/sql-injection-changer.yaml
 
-# Override model from profile
-dotnet run --project llmaid -- --profile ./profiles/code-documenter.yaml --model gpt-4o
-
 # Run without profile (all settings via CLI)
 llmaid --provider openai --model gpt-4o --targetPath ./src --systemPrompt "..."
 
 # Dry run to see which files would be processed
-dotnet run --project llmaid -- --profile ./profiles/code-documenter.yaml --dryRun true
+llmaid -- --profile ./profiles/code-documenter.yaml --dryRun
 
-# Analyze only (output to console instead of overwriting files)
-dotnet run --project llmaid -- --profile ./profiles/nda-checker.yaml --applyCodeblock false
+# Verbose output with detailed token and timing information
+llmaid -- --profile ./profiles/code-documenter.yaml --verbose
 ```
 
 Available arguments:
@@ -133,6 +130,7 @@ Available arguments:
 - `--systemPrompt` – System prompt text
 - `--dryRun` – Simulate without changes
 - `--maxRetries` – Retry count on failures
+- `--verbose` – Show detailed output (tokens, timing, settings)
 
 ### Supported Providers
 
