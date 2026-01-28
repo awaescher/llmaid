@@ -118,6 +118,14 @@ public class Settings
 	public bool? Verbose { get; set; }
 
 	/// <summary>
+	/// Gets or sets the cooldown time in seconds to wait after processing each file.
+	/// This can be used to prevent processor overheating during batch processing.
+	/// Default is 0 (no cooldown).
+	/// </summary>
+	[JsonPropertyName("cooldownSeconds")]
+	public int? CooldownSeconds { get; set; }
+
+	/// <summary>
 	/// Validates the current arguments, ensuring all required fields are properly set.
 	/// </summary>
 	/// <param name="requireProfile">If true, validates that a profile file exists. Set to false when running purely from CLI.</param>

@@ -62,7 +62,8 @@ This file only contains your LLM provider connection settings:
   "Provider": "lmstudio",
   "Uri": "http://localhost:1234/v1",
   "ApiKey": "",
-  "WriteResponseToConsole": true
+  "WriteResponseToConsole": true,
+  "CooldownSeconds": 0
 }
 ```
 
@@ -78,6 +79,7 @@ targetPath: ./src
 temperature: 0.25
 applyCodeblock: true
 maxRetries: 1
+cooldownSeconds: 5  # wait 5 seconds between files to prevent overheating
 
 files:
   include:
@@ -131,6 +133,7 @@ Available arguments:
 - `--dryRun` – Simulate without changes
 - `--maxRetries` – Retry count on failures
 - `--verbose` – Show detailed output (tokens, timing, settings)
+- `--cooldownSeconds` – Cooldown time in seconds after processing each file (default: 0, prevents processor overheating)
 
 ### Supported Providers
 

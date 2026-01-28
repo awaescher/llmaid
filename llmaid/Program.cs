@@ -108,6 +108,14 @@ internal static class Program
 
 			if (!success)
 				errors++;
+
+			// Apply cooldown after processing each file (if configured)
+			var cooldownSeconds = settings.CooldownSeconds ?? 0;
+			if (cooldownSeconds > 0)
+			{
+				LogVerboseDetail($"Cooling down for {cooldownSeconds} seconds...");
+				await Task.Delay(TimeSpan.FromSeconds(cooldownSeconds), cancellationToken);
+			}
 		}
 
 		LogVerboseInfo("Finished in " + totalStopWatch.Elapsed.ToString());
@@ -153,6 +161,7 @@ internal static class Program
 		var maxRetriesOption = new Option<int>(MakeArgument(nameof(Settings.MaxRetries)), "The maximum number of retries if a response could not be processed");
 		var verboseOption = new Option<bool?>(MakeArgument(nameof(Settings.Verbose)), "Show detailed output including tokens and timing information");
 		verboseOption.Arity = ArgumentArity.ZeroOrOne;
+		var cooldownSecondsOption = new Option<int?>(MakeArgument(nameof(Settings.CooldownSeconds)), "Cooldown time in seconds after processing each file (prevents overheating)");
 
 		var rootCommand = new RootCommand
 		{
@@ -169,7 +178,8 @@ internal static class Program
 			temperatureOption,
 			systemPromptOption,
 			maxRetriesOption,
-			verboseOption
+			verboseOption,
+			cooldownSecondsOption
 		};
 
 		rootCommand.SetHandler(context =>
@@ -195,6 +205,8 @@ internal static class Program
 			// Handle toggle flags: when specified without value, they default to true
 			if (context.ParseResult.FindResultFor(verboseOption) is not null)
 				settings.Verbose = context.ParseResult.GetValueForOption(verboseOption) ?? true;
+
+			settings.CooldownSeconds = context.ParseResult.GetValueForOption(cooldownSecondsOption);
 
 			context.ExitCode = 0;
 		});
