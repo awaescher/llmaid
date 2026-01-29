@@ -10,6 +10,7 @@ using OllamaSharp;
 using OllamaSharp.Models;
 using Serilog;
 using Spectre.Console;
+using UtfUnknown;
 namespace llmaid;
 
 internal static class Program
@@ -256,10 +257,12 @@ internal static class Program
 	private static async Task<bool> ProcessFile(string file, string systemPromptTemplate, string retryMessage, Settings settings, CancellationToken cancellationToken)
 	{
 		string originalCode = string.Empty;
+		Encoding originalEncoding;
 
 		try
 		{
-			originalCode = await File.ReadAllTextAsync(file, cancellationToken);
+			(originalCode, originalEncoding) = await ReadFileWithEncodingAsync(file, cancellationToken);
+			LogVerboseDetail($"Detected encoding: {originalEncoding.EncodingName}");
 		}
 		catch (Exception ex)
 		{
@@ -379,10 +382,10 @@ internal static class Program
 			var couldExtractCode = !string.IsNullOrWhiteSpace(extractedCode);
 			if (couldExtractCode)
 			{
-				var bytes = Encoding.UTF8.GetBytes(extractedCode);
-				await File.WriteAllBytesAsync(file, bytes, cancellationToken);
+				// Write with the same encoding as the original file (preserving BOM if present)
+				await File.WriteAllTextAsync(file, extractedCode, originalEncoding, cancellationToken);
 				// Standard output: result in cyan
-				LogResult($"{bytes.Length} bytes written");
+				LogResult($"{originalEncoding.GetByteCount(extractedCode) + originalEncoding.GetPreamble().Length} bytes written");
 			}
 			else
 			{
@@ -592,5 +595,49 @@ internal static class Program
 		var codeTokens = CountTokens(originalCode);
 		var contextLength = systemPromptTokens + codeTokens + estimatedResponseTokens;
 		return Math.Max(2048, contextLength);
+	}
+
+	/// <summary>
+	/// Reads a file and detects its encoding. Uses StreamReader for BOM detection
+	/// and UTF-Unknown library as fallback for content-based detection.
+	/// </summary>
+	private static async Task<(string content, Encoding encoding)> ReadFileWithEncodingAsync(string file, CancellationToken cancellationToken)
+	{
+		// First, read the file bytes to check for BOM and use content-based detection
+		var fileBytes = await File.ReadAllBytesAsync(file, cancellationToken);
+		
+		if (fileBytes.Length == 0)
+			return (string.Empty, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+		// Use UTF-Unknown for encoding detection (handles both BOM and content-based detection)
+		var detectionResult = CharsetDetector.DetectFromBytes(fileBytes);
+		
+		Encoding encoding;
+		if (detectionResult.Detected != null)
+		{
+			var detectedEncoding = detectionResult.Detected.Encoding;
+			var hasBom = detectionResult.Detected.HasBOM;
+			
+			// ASCII is a subset of UTF-8, treat as UTF-8 without BOM
+			// For UTF-8, preserve BOM status
+			if (detectedEncoding.WebName.Equals("us-ascii", StringComparison.OrdinalIgnoreCase))
+				encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+			else if (detectedEncoding is UTF8Encoding || detectedEncoding.WebName.Equals("utf-8", StringComparison.OrdinalIgnoreCase))
+				encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: hasBom);
+			else
+				encoding = detectedEncoding;
+		}
+		else
+		{
+			// Fallback to UTF-8 without BOM
+			encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+		}
+
+		// Use StreamReader to properly decode the content (handles BOM automatically)
+		using var stream = new MemoryStream(fileBytes);
+		using var reader = new StreamReader(stream, encoding, detectEncodingFromByteOrderMarks: true);
+		var content = await reader.ReadToEndAsync(cancellationToken);
+		
+		return (content, encoding);
 	}
 }
