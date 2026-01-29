@@ -180,6 +180,7 @@ internal static class Program
 		var cooldownSecondsOption = new Option<int?>(MakeArgument(nameof(Settings.CooldownSeconds)), "Cooldown time in seconds after processing each file (prevents overheating)");
 		var maxFileTokensOption = new Option<int?>(MakeArgument(nameof(Settings.MaxFileTokens)), "Maximum number of tokens a file may contain before it is skipped (default: 102400)");
 		var resumeAtOption = new Option<string>(MakeArgument(nameof(Settings.ResumeAt)), "Resume processing from a specific file (skips all files until a filename containing this pattern is found)");
+		var ollamaMinNumCtxOption = new Option<int?>(MakeArgument(nameof(Settings.OllamaMinNumCtx)), "Minimum context length for Ollama provider to prevent unnecessary model reloads (default: 20480)");
 
 		var rootCommand = new RootCommand
 		{
@@ -199,7 +200,8 @@ internal static class Program
 			verboseOption,
 			cooldownSecondsOption,
 			maxFileTokensOption,
-			resumeAtOption
+			resumeAtOption,
+			ollamaMinNumCtxOption
 		};
 
 		rootCommand.SetHandler(context =>
@@ -229,6 +231,7 @@ internal static class Program
 			settings.CooldownSeconds = context.ParseResult.GetValueForOption(cooldownSecondsOption);
 			settings.MaxFileTokens = context.ParseResult.GetValueForOption(maxFileTokensOption);
 			settings.ResumeAt = context.ParseResult.GetValueForOption(resumeAtOption);
+			settings.OllamaMinNumCtx = context.ParseResult.GetValueForOption(ollamaMinNumCtxOption) ?? settings.OllamaMinNumCtx;
 
 			context.ExitCode = 0;
 		});
