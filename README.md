@@ -148,6 +148,7 @@ Available arguments:
 - `--cooldownSeconds` – Cooldown time after processing each file to prevent overheating (default: 0)
 - `--maxFileTokens` – Maximum tokens a file may contain before it is skipped (default: 102400)
 - `--resumeAt` – Resume processing from a specific file (skips all files until a filename containing this pattern is found)
+- `--preserveWhitespace` – Preserve original leading and trailing whitespace when writing files to avoid diff noise (default: false)
 
 ### Supported Providers
 

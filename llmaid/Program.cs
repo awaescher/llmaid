@@ -182,6 +182,8 @@ internal static class Program
 		var maxFileTokensOption = new Option<int?>(MakeArgument(nameof(Settings.MaxFileTokens)), "Maximum number of tokens a file may contain before it is skipped (default: 102400)");
 		var resumeAtOption = new Option<string>(MakeArgument(nameof(Settings.ResumeAt)), "Resume processing from a specific file (skips all files until a filename containing this pattern is found)");
 		var ollamaMinNumCtxOption = new Option<int?>(MakeArgument(nameof(Settings.OllamaMinNumCtx)), "Minimum context length for Ollama provider to prevent unnecessary model reloads (default: 20480)");
+		var preserveWhitespaceOption = new Option<bool?>(MakeArgument(nameof(Settings.PreserveWhitespace)), "Preserve original leading and trailing whitespace to avoid diff noise (default: false)");
+		preserveWhitespaceOption.Arity = ArgumentArity.ZeroOrOne;
 
 		var rootCommand = new RootCommand
 		{
@@ -202,7 +204,8 @@ internal static class Program
 			cooldownSecondsOption,
 			maxFileTokensOption,
 			resumeAtOption,
-			ollamaMinNumCtxOption
+			ollamaMinNumCtxOption,
+			preserveWhitespaceOption
 		};
 
 		rootCommand.SetHandler(context =>
@@ -233,6 +236,10 @@ internal static class Program
 			settings.MaxFileTokens = context.ParseResult.GetValueForOption(maxFileTokensOption);
 			settings.ResumeAt = context.ParseResult.GetValueForOption(resumeAtOption);
 			settings.OllamaMinNumCtx = context.ParseResult.GetValueForOption(ollamaMinNumCtxOption) ?? settings.OllamaMinNumCtx;
+
+			// Handle toggle flags: when specified without value, they default to true
+			if (context.ParseResult.FindResultFor(preserveWhitespaceOption) is not null)
+				settings.PreserveWhitespace = context.ParseResult.GetValueForOption(preserveWhitespaceOption) ?? true;
 
 			context.ExitCode = 0;
 		});
@@ -382,10 +389,22 @@ internal static class Program
 			var couldExtractCode = !string.IsNullOrWhiteSpace(extractedCode);
 			if (couldExtractCode)
 			{
+				string finalCode;
+				if (settings.PreserveWhitespace ?? false)
+				{
+					// Preserve original leading and trailing whitespace to avoid diff noise
+					var (leadingWhitespace, trailingWhitespace) = ExtractWhitespace(originalCode);
+					finalCode = leadingWhitespace + extractedCode.Trim() + trailingWhitespace;
+				}
+				else
+				{
+					finalCode = extractedCode;
+				}
+
 				// Write with the same encoding as the original file (preserving BOM if present)
-				await File.WriteAllTextAsync(file, extractedCode, originalEncoding, cancellationToken);
+				await File.WriteAllTextAsync(file, finalCode, originalEncoding, cancellationToken);
 				// Standard output: result in cyan
-				LogResult($"{originalEncoding.GetByteCount(extractedCode) + originalEncoding.GetPreamble().Length} bytes written");
+				LogResult($"{originalEncoding.GetByteCount(finalCode) + originalEncoding.GetPreamble().Length} bytes written");
 			}
 			else
 			{
@@ -595,6 +614,28 @@ internal static class Program
 		var codeTokens = CountTokens(originalCode);
 		var contextLength = systemPromptTokens + codeTokens + estimatedResponseTokens;
 		return Math.Max(2048, contextLength);
+	}
+
+	/// <summary>
+	/// Extracts the leading and trailing whitespace from a string.
+	/// Used to preserve original file whitespace when replacing content.
+	/// </summary>
+	private static (string leading, string trailing) ExtractWhitespace(string text)
+	{
+		if (string.IsNullOrEmpty(text))
+			return (string.Empty, string.Empty);
+
+		var trimmed = text.Trim();
+		if (trimmed.Length == 0)
+			return (text, string.Empty); // All whitespace
+
+		var leadingLength = text.IndexOf(trimmed[0]);
+		var trailingStart = text.LastIndexOf(trimmed[^1]) + 1;
+
+		var leading = text[..leadingLength];
+		var trailing = text[trailingStart..];
+
+		return (leading, trailing);
 	}
 
 	/// <summary>

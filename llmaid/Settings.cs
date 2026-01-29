@@ -147,6 +147,14 @@ public class Settings
 	public int? MaxFileTokens { get; set; } = 102400;
 
 	/// <summary>
+	/// Gets or sets a value indicating whether to preserve the original leading and trailing whitespace
+	/// when writing back the processed code. This helps avoid diff noise from whitespace changes.
+	/// Default is false.
+	/// </summary>
+	[JsonPropertyName("preserveWhitespace")]
+	public bool? PreserveWhitespace { get; set; }
+
+	/// <summary>
 	/// Validates the current arguments, ensuring all required fields are properly set.
 	/// </summary>
 	/// <param name="requireProfile">If true, validates that a profile file exists. Set to false when running purely from CLI.</param>
