@@ -87,6 +87,14 @@ public class Settings
 	public bool DryRun { get; set; }
 
 	/// <summary>
+	/// Gets or sets a pattern to resume processing from a specific file.
+	/// All files will be skipped until a filename containing this pattern is found.
+	/// Use this to continue processing from where you left off after an interruption.
+	/// </summary>
+	[JsonPropertyName("resumeAt")]
+	public string? ResumeAt { get; set; }
+
+	/// <summary>
 	/// Gets or sets the string that should be used to start the assistant's message.
 	/// Can be used to make the model think it started with the a code block already to prevent it from talking about it.
 	/// </summary>

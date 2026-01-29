@@ -147,6 +147,7 @@ Available arguments:
 - `--verbose` – Show detailed output (tokens, timing, settings)
 - `--cooldownSeconds` – Cooldown time after processing each file to prevent overheating (default: 0)
 - `--maxFileTokens` – Maximum tokens a file may contain before it is skipped (default: 102400)
+- `--resumeAt` – Resume processing from a specific file (skips all files until a filename containing this pattern is found)
 
 ### Supported Providers
 
@@ -158,6 +159,18 @@ Available arguments:
 | `openai-compatible` | Your server's URL | Depends on server |
 
 ## FAQ
+
+### Can I continue where I left off earlier?
+
+Yes! Use the `--resumeAt` parameter with a pattern matching the filename where you want to resume. All files before that match will be skipped (like a dry run).
+
+**Example:** If you interrupted llmaid after hundreds of files while it was processing `~/Developer/MyApp/UserService.cs`, you can continue like this`:
+
+```bash
+llmaid --profile ./profiles/code-documenter.yaml --resumeAt UserService
+```
+
+The pattern is case-insensitive and matches any part of the file path, so you don't need to specify the full path.
 
 ### I get an 404 (Not Found)
 It is very likely that Ollama returns this 404 because it doesn't know the model that's specified in the appsettings.json. Make sure to specify a model you have downloaded.

@@ -75,9 +75,26 @@ internal static class Program
 		FileCount = files.Length;
 
 		var errors = 0;
+		var hasResumed = string.IsNullOrWhiteSpace(settings.ResumeAt);
+
 		foreach (var file in files)
 		{
 			CurrentFileIndex++;
+
+			// Check if we need to skip files until we find the resume pattern
+			if (!hasResumed)
+			{
+				if (file.Contains(settings.ResumeAt!, StringComparison.OrdinalIgnoreCase))
+				{
+					hasResumed = true;
+				}
+				else
+				{
+					LogVerboseDetail($"[{CurrentFileIndex}/{FileCount}] Skipping (resume): {file}");
+					continue;
+				}
+			}
+
 			var fileHeader = $"[{CurrentFileIndex}/{FileCount}] {file} ({GetFileSizeString(file)})";
 			LogFileHeader(fileHeader);
 
@@ -162,6 +179,7 @@ internal static class Program
 		verboseOption.Arity = ArgumentArity.ZeroOrOne;
 		var cooldownSecondsOption = new Option<int?>(MakeArgument(nameof(Settings.CooldownSeconds)), "Cooldown time in seconds after processing each file (prevents overheating)");
 		var maxFileTokensOption = new Option<int?>(MakeArgument(nameof(Settings.MaxFileTokens)), "Maximum number of tokens a file may contain before it is skipped (default: 102400)");
+		var resumeAtOption = new Option<string>(MakeArgument(nameof(Settings.ResumeAt)), "Resume processing from a specific file (skips all files until a filename containing this pattern is found)");
 
 		var rootCommand = new RootCommand
 		{
@@ -180,7 +198,8 @@ internal static class Program
 			maxRetriesOption,
 			verboseOption,
 			cooldownSecondsOption,
-			maxFileTokensOption
+			maxFileTokensOption,
+			resumeAtOption
 		};
 
 		rootCommand.SetHandler(context =>
@@ -209,6 +228,7 @@ internal static class Program
 
 			settings.CooldownSeconds = context.ParseResult.GetValueForOption(cooldownSecondsOption);
 			settings.MaxFileTokens = context.ParseResult.GetValueForOption(maxFileTokensOption);
+			settings.ResumeAt = context.ParseResult.GetValueForOption(resumeAtOption);
 
 			context.ExitCode = 0;
 		});
