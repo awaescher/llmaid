@@ -184,6 +184,8 @@ internal static class Program
 		var ollamaMinNumCtxOption = new Option<int?>(MakeArgument(nameof(Settings.OllamaMinNumCtx)), "Minimum context length for Ollama provider to prevent unnecessary model reloads (default: 20480)");
 		var preserveWhitespaceOption = new Option<bool?>(MakeArgument(nameof(Settings.PreserveWhitespace)), "Preserve original leading and trailing whitespace to avoid diff noise (default: false)");
 		preserveWhitespaceOption.Arity = ArgumentArity.ZeroOrOne;
+		var showProgressOption = new Option<bool?>(MakeArgument(nameof(Settings.ShowProgress)), "Show progress indicator during file processing (default: true)");
+		showProgressOption.Arity = ArgumentArity.ZeroOrOne;
 
 		var rootCommand = new RootCommand
 		{
@@ -205,7 +207,8 @@ internal static class Program
 			maxFileTokensOption,
 			resumeAtOption,
 			ollamaMinNumCtxOption,
-			preserveWhitespaceOption
+			preserveWhitespaceOption,
+			showProgressOption
 		};
 
 		rootCommand.SetHandler(context =>
@@ -240,7 +243,11 @@ internal static class Program
 			// Handle toggle flags: when specified without value, they default to true
 			if (context.ParseResult.FindResultFor(preserveWhitespaceOption) is not null)
 				settings.PreserveWhitespace = context.ParseResult.GetValueForOption(preserveWhitespaceOption) ?? true;
-
+	
+			// Handle toggle flags: when specified without value, they default to true (but inverted: --showProgress false hides it)
+			if (context.ParseResult.FindResultFor(showProgressOption) is not null)
+				settings.ShowProgress = context.ParseResult.GetValueForOption(showProgressOption) ?? true;
+	
 			context.ExitCode = 0;
 		});
 
@@ -330,44 +337,69 @@ internal static class Program
 		var generatedCodeBuilder = new StringBuilder();
 
 		ChatResponseUpdate? response = null;
-
-		await AnsiConsole.Progress()
-			.AutoClear(true)
-			.Columns(new TaskDescriptionColumn(), new ProgressBarColumn(), new PercentageColumn(), new RemainingTimeColumn(), new SpinnerColumn())
-			.StartAsync(async ctx =>
-			{
-				var sendTask = ctx.AddTask("[green]Sending[/]");
-				var waitTask = ctx.AddTask("[green]Waiting[/]");
-				var receiveTask = ctx.AddTask("[green]Receiving[/]");
-
-				while (!ctx.IsFinished)
+	
+		var showProgress = settings.ShowProgress ?? true;
+	
+		if (showProgress)
+		{
+			await AnsiConsole.Progress()
+				.AutoClear(true)
+				.Columns(new TaskDescriptionColumn(), new ProgressBarColumn(), new PercentageColumn(), new RemainingTimeColumn(), new SpinnerColumn())
+				.StartAsync(async ctx =>
 				{
-					sendTask.Increment(100);
-
-					messages.Add(new ChatMessage(ChatRole.User, userPrompt));
-
-					if (!string.IsNullOrEmpty(retryMessage))
-						messages.Add(new ChatMessage(ChatRole.User, retryMessage));
-
-					var hasAssistantStarter = !string.IsNullOrWhiteSpace(settings.AssistantStarter);
-					if (hasAssistantStarter)
-						messages.Add(new ChatMessage(ChatRole.Assistant, settings.AssistantStarter));
-
-					response = await ChatClient.GetStreamingResponseAsync(messages, options, cancellationToken).StreamToEndAsync(token =>
+					var sendTask = ctx.AddTask("[green]Sending[/]");
+					var waitTask = ctx.AddTask("[green]Waiting[/]");
+					var receiveTask = ctx.AddTask("[green]Receiving[/]");
+	
+					while (!ctx.IsFinished)
 					{
-						if (waitTask.Value == 0)
-							waitTask.Increment(100);
-
-						generatedCodeBuilder.Append(token?.Text ?? "");
-						receiveTask.Value = CalculateProgress(generatedCodeBuilder.Length, estimatedResponseTokens);
-					}).ConfigureAwait(false);
-
-					if (hasAssistantStarter && response != null)
-						generatedCodeBuilder.Insert(0, settings.AssistantStarter);
-
-					receiveTask.Value = 100;
-				}
-			});
+						sendTask.Increment(100);
+	
+						messages.Add(new ChatMessage(ChatRole.User, userPrompt));
+	
+						if (!string.IsNullOrEmpty(retryMessage))
+							messages.Add(new ChatMessage(ChatRole.User, retryMessage));
+	
+						var hasAssistantStarter = !string.IsNullOrWhiteSpace(settings.AssistantStarter);
+						if (hasAssistantStarter)
+							messages.Add(new ChatMessage(ChatRole.Assistant, settings.AssistantStarter));
+	
+						response = await ChatClient.GetStreamingResponseAsync(messages, options, cancellationToken).StreamToEndAsync(token =>
+						{
+							if (waitTask.Value == 0)
+								waitTask.Increment(100);
+	
+							generatedCodeBuilder.Append(token?.Text ?? "");
+							receiveTask.Value = CalculateProgress(generatedCodeBuilder.Length, estimatedResponseTokens);
+						}).ConfigureAwait(false);
+	
+						if (hasAssistantStarter && response != null)
+							generatedCodeBuilder.Insert(0, settings.AssistantStarter);
+	
+						receiveTask.Value = 100;
+					}
+				});
+		}
+		else
+		{
+			// Process without progress indicator
+			messages.Add(new ChatMessage(ChatRole.User, userPrompt));
+	
+			if (!string.IsNullOrEmpty(retryMessage))
+				messages.Add(new ChatMessage(ChatRole.User, retryMessage));
+	
+			var hasAssistantStarter = !string.IsNullOrWhiteSpace(settings.AssistantStarter);
+			if (hasAssistantStarter)
+				messages.Add(new ChatMessage(ChatRole.Assistant, settings.AssistantStarter));
+	
+			response = await ChatClient.GetStreamingResponseAsync(messages, options, cancellationToken).StreamToEndAsync(token =>
+			{
+				generatedCodeBuilder.Append(token?.Text ?? "");
+			}).ConfigureAwait(false);
+	
+			if (hasAssistantStarter && response != null)
+				generatedCodeBuilder.Insert(0, settings.AssistantStarter);
+		}
 
 		// Show actual token usage
 

@@ -155,6 +155,14 @@ public class Settings
 	public bool? PreserveWhitespace { get; set; }
 
 	/// <summary>
+	/// Gets or sets a value indicating whether to show the progress indicator during file processing.
+	/// Set to false to hide the progress bar, which can be useful for scripting or CI/CD pipelines.
+	/// Default is true.
+	/// </summary>
+	[JsonPropertyName("showProgress")]
+	public bool? ShowProgress { get; set; } = true;
+
+	/// <summary>
 	/// Validates the current arguments, ensuring all required fields are properly set.
 	/// </summary>
 	/// <param name="requireProfile">If true, validates that a profile file exists. Set to false when running purely from CLI.</param>
