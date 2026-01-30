@@ -138,7 +138,7 @@ Available arguments:
 - `--apiKey` – API key (if required)
 - `--model` – Model identifier
 - `--profile` – Path to YAML profile
-- `--targetPath` – Directory with files to process
+- `--targetPath` – Directory with files to process, or a single file (when specifying a file, glob patterns are ignored)
 - `--applyCodeblock` – `true` extracts codeblock and overwrites file, `false` outputs response to console
 - `--temperature` – Model temperature (0-2)
 - `--systemPrompt` – System prompt text

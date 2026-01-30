@@ -13,6 +13,13 @@ public class FileLoader : IFileLoader
 
 	public IEnumerable<string> Get(string path, Files files)
 	{
+		// If path is a file, return it directly (ignore glob patterns)
+		if (File.Exists(path))
+		{
+			yield return path;
+			yield break;
+		}
+
 		var ignore = new Ignore.Ignore();
 		ignore.Add(files.Exclude.Select(Normalize));
 

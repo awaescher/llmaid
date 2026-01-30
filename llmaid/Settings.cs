@@ -170,11 +170,13 @@ public class Settings
 		if (!knownProvider)
 			throw new ArgumentException("Provider has to be 'ollama', 'openai', 'lmstudio', or 'openai-compatible'.");
 
-		if ((Files ?? new Files([], [])).Include?.Any() == false)
-			throw new ArgumentException("At least one file pattern must be defined.");
-
 		if (string.IsNullOrEmpty(TargetPath))
 			throw new ArgumentException("Target path has to be defined.");
+
+		// File patterns are only required when TargetPath is a directory, not when it's a file
+		var isFile = File.Exists(TargetPath);
+		if (!isFile && (Files ?? new Files([], [])).Include?.Any() == false)
+			throw new ArgumentException("At least one file pattern must be defined.");
 
 		if (string.IsNullOrEmpty(Model))
 			throw new ArgumentException("Model has to be defined.");
