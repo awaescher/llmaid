@@ -17,6 +17,32 @@ dotnet build llmaid/llmaid.csproj      # Build main project only
 dotnet run --project llmaid -- --profile ./profiles/code-documenter.yaml
 ```
 
+### Testing the app (CLI) locally
+
+Choose the test profile you want to test, like `./profiles/code-documenter.yaml`
+Use the following commands to test llmaid locally against `./testfiles`. Successful runs will show Git changes in the testfiles directory.
+Using `./testfiles` will change all the files in that directory which is good to check the results but takes long. You can also pick single files from there and use these as targetPath to speed up the test.
+
+**Using LM Studio (preferred):**
+```bash
+dotnet run --project llmaid -- --profile TEST-PROFILE-HERE --targetPath ./testfiles --provider lmstudio --uri http://localhost:1234/v1 --model openai-gpt-oss-120b --verbose
+```
+
+If the model is not available, query the models endpoint to find an available model:
+```bash
+curl http://localhost:1234/api/v1/models
+```
+
+**Using Ollama (fallback):**
+```bash
+dotnet run --project llmaid -- --profile TEST-PROFILE-HERE --targetPath ./testfiles --provider ollama --uri http://localhost:11434 --model gpt-oss:120b --verbose
+```
+
+Query available models via:
+```bash
+curl http://localhost:11434/api/tags
+```
+
 ### Test
 ```bash
 # Run all tests
