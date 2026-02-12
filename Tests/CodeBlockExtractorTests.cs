@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using llmaid;
 
 namespace Tests;
@@ -25,7 +25,7 @@ wat
 """;
 			var code = CodeBlockExtractor.Extract(input);
 
-			code.Should().Be("private static string Test(string text) { }");
+			code.ShouldBe("private static string Test(string text) { }");
 		}
 
 		[Test]
@@ -42,7 +42,7 @@ Listen to Iron Maiden, baby, with me.
 """;
 			var code = CodeBlockExtractor.Extract(input);
 
-			code.Should().Be("private static string Test(string text) { }");
+			code.ShouldBe("private static string Test(string text) { }");
 		}
 
 		[Test]
@@ -64,7 +64,7 @@ private static string AnotherTest() { }
 """;
 			var code = CodeBlockExtractor.Extract(input);
 
-			code.Should().Be("private static string Test(string text) { }");
+			code.ShouldBe("private static string Test(string text) { }");
 		}
 
 		[Test]
@@ -79,7 +79,7 @@ private static string Test(string text) { }
 """;
 			var code = CodeBlockExtractor.Extract(input);
 
-			code.Should().Be("private static string Test(string text) { }");
+			code.ShouldBe("private static string Test(string text) { }");
 		}
 
 		[Test]
@@ -94,7 +94,7 @@ private static string Test(string text) { }
 """;
 			var code = CodeBlockExtractor.Extract(input);
 
-			code.Should().Be("private static string Test(string text) { }");
+			code.ShouldBe("private static string Test(string text) { }");
 		}
 
 		[Test, Ignore("This is failing right now, seems acceptable")]
@@ -109,7 +109,7 @@ private static string Test(string text) { }
 """;
 			var code = CodeBlockExtractor.Extract(input);
 
-			code.Should().Be("private static string Test(string text) { }");
+			code.ShouldBe("private static string Test(string text) { }");
 		}
 
 		[Test]
@@ -130,7 +130,7 @@ internal static class Policies
 
 			var code = CodeBlockExtractor.Extract(input);
 
-			code.Should().StartWith("using Microsoft.AspNetCore.Authorization;");
+			code.ShouldStartWith("using Microsoft.AspNetCore.Authorization;");
 		}
 
 		[Test]
@@ -146,7 +146,7 @@ private static string Test(string text) { }
 
 			var code = CodeBlockExtractor.Extract(input);
 
-			code.Should().Be("private static string Test(string text) { }");
+			code.ShouldBe("private static string Test(string text) { }");
 		}
 
 		[Test]
@@ -161,7 +161,7 @@ private static string Test(string text) { }
 """;
 			var code = CodeBlockExtractor.Extract(input);
 
-			code.Should().Be("private static string Test(string text) { }");
+			code.ShouldBe("private static string Test(string text) { }");
 		}
 
 		[Test, Ignore("This is failing right now, seems acceptable")]
@@ -176,7 +176,7 @@ private static string Test(string text) { }
 """;
 			var code = CodeBlockExtractor.Extract(input);
 
-			code.Should().Be("private static string Test(string text) { }");
+			code.ShouldBe("private static string Test(string text) { }");
 		}
 	}
 }

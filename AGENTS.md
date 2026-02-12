@@ -150,7 +150,7 @@ if (!File.Exists(profileFile))
 
 ### Framework
 - **NUnit 3.14** for test framework
-- **FluentAssertions** for assertions
+- **Shouldly** for assertions
 - Global using for `NUnit.Framework` in test project
 
 ### Test Organization
@@ -178,8 +178,8 @@ public class CodeBlockExtractorTests
 - Use `[Ignore("reason")]` for known failing tests
 
 ### Assertions
-- Use FluentAssertions: `.Should().Be()`, `.Should().StartWith()`
+- Use Shouldly: `.ShouldBe()`, `.ShouldStartWith()`
 ```csharp
-code.Should().Be("expected value");
-result.Should().StartWith("prefix");
+code.ShouldBe("expected value");
+result.ShouldStartWith("prefix");
 ```
