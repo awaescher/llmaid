@@ -23,7 +23,9 @@ internal static class Program
 	// Cumulative token tracking across all files
 	private static long _cumulativeInputTokens;
 	private static long _cumulativeOutputTokens;
+	private static long _cumulativeReasoningTokens;
 	private static long _cumulativeTotalTokens;
+	private static Stopwatch _totalStopwatch = new();
 
 	// Tokenizer for accurate token estimation (o200k_base is the standard for GPT-4o and similar models)
 
@@ -66,6 +68,7 @@ internal static class Program
 		// Initialize cumulative token counters
 		_cumulativeInputTokens = 0;
 		_cumulativeOutputTokens = 0;
+		_cumulativeReasoningTokens = 0;
 		_cumulativeTotalTokens = 0;
 
 		Log.Logger = new LoggerConfiguration()
@@ -79,7 +82,7 @@ internal static class Program
 		LogVerboseDetail(JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true }));
 
 		var loader = new FileLoader();
-		var totalStopWatch = Stopwatch.StartNew();
+		_totalStopwatch = Stopwatch.StartNew();
 
 		LogVerboseInfo("Locating all files ..." + Environment.NewLine);
 		var files = loader.GetAll(settings.TargetPath ?? string.Empty, settings.Files ?? new Files([], []));
@@ -116,21 +119,13 @@ internal static class Program
 				attempt++;
 				if (attempt > 1)
 					LogVerboseDetail("Attempt " + attempt);
-				var stopwatch = Stopwatch.StartNew();
-				try
-				{
-					var retryMessage = attempt > 1 ? $"This is the {attempt}. attempt to process this file, all prior attempts failed because your response could not be processed. Please follow the instructions more closely." : "";
-					if (settings.DryRun)
-						success = true;
-					else
-						success = await ProcessFile(file, settings.SystemPrompt ?? string.Empty, retryMessage, settings, cancellationToken);
-				}
-				finally
-				{
-					stopwatch.Stop();
-					if (!settings.DryRun)
-						LogVerboseDetail($"{stopwatch.Elapsed}{Environment.NewLine}");
-				}
+
+				var retryMessage = attempt > 1 ? $"This is the {attempt}. attempt to process this file, all prior attempts failed because your response could not be processed. Please follow the instructions more closely." : "";
+				if (settings.DryRun)
+					success = true;
+				else
+					success = await ProcessFile(file, settings.SystemPrompt ?? string.Empty, retryMessage, settings, cancellationToken);
+
 			} while (!success && attempt < settings.MaxRetries);
 
 			if (!success)
@@ -145,17 +140,16 @@ internal static class Program
 			}
 		}
 
-		LogVerboseInfo("Finished in " + totalStopWatch.Elapsed.ToString());
-		LogVerboseInfo($"{errors} error{(errors == 1 ? "" : "s")} occured.");
-
 		// Final token summary (always shown in verbose mode, also in normal mode if ShowProgress is enabled)
 		if ((Verbose || (settings.ShowProgress ?? true)) && !settings.DryRun)
 		{
 			LogVerboseInfo("");
 			LogVerboseInfo("=== FINAL TOKEN SUMMARY ===");
-			LogVerboseInfo($"Total Input Tokens:  {_cumulativeInputTokens:N0}");
-			LogVerboseInfo($"Total Output Tokens: {_cumulativeOutputTokens:N0}");
-			LogVerboseInfo($"Total Tokens:       {_cumulativeTotalTokens:N0}");
+			LogVerboseInfo($"Total Input Tokens:     {_cumulativeInputTokens,6:N0}");
+			LogVerboseInfo($"Total Output Tokens:    {_cumulativeOutputTokens,6:N0}");
+			if (_cumulativeReasoningTokens > 0)
+				LogVerboseInfo($"Total Reasoning Tokens: {_cumulativeReasoningTokens,6:N0}");
+			LogVerboseInfo($"Total Tokens:           {_cumulativeTotalTokens,6:N0}");
 			LogVerboseInfo("==========================");
 		}
 	}
@@ -291,6 +285,7 @@ internal static class Program
 
 	private static async Task<bool> ProcessFile(string file, string systemPromptTemplate, string retryMessage, Settings settings, CancellationToken cancellationToken)
 	{
+		var stopwatch = Stopwatch.StartNew();
 		string originalCode = string.Empty;
 		Encoding originalEncoding;
 
@@ -357,7 +352,7 @@ internal static class Program
 
 		var generatedCodeBuilder = new StringBuilder();
 
-		ChatResponseUpdate? response = null;
+		var streamingUpdates = new List<ChatResponseUpdate>();
 
 		var showProgress = settings.ShowProgress ?? true;
 
@@ -385,16 +380,17 @@ internal static class Program
 						if (hasAssistantStarter)
 							messages.Add(new ChatMessage(ChatRole.Assistant, settings.AssistantStarter));
 
-						response = await ChatClient.GetStreamingResponseAsync(messages, options, cancellationToken).StreamToEndAsync(token =>
+						await foreach (var update in ChatClient.GetStreamingResponseAsync(messages, options, cancellationToken).ConfigureAwait(false))
 						{
 							if (waitTask.Value == 0)
 								waitTask.Increment(100);
 
-							generatedCodeBuilder.Append(token?.Text ?? "");
+							streamingUpdates.Add(update);
+							generatedCodeBuilder.Append(update?.Text ?? "");
 							receiveTask.Value = CalculateProgress(generatedCodeBuilder.Length, estimatedResponseTokens);
-						}).ConfigureAwait(false);
+						}
 
-						if (hasAssistantStarter && response != null)
+						if (hasAssistantStarter)
 							generatedCodeBuilder.Insert(0, settings.AssistantStarter);
 
 						receiveTask.Value = 100;
@@ -413,32 +409,45 @@ internal static class Program
 			if (hasAssistantStarter)
 				messages.Add(new ChatMessage(ChatRole.Assistant, settings.AssistantStarter));
 
-			response = await ChatClient.GetStreamingResponseAsync(messages, options, cancellationToken).StreamToEndAsync(token =>
+			await foreach (var update in ChatClient.GetStreamingResponseAsync(messages, options, cancellationToken).ConfigureAwait(false))
 			{
-				generatedCodeBuilder.Append(token?.Text ?? "");
-			}).ConfigureAwait(false);
+				streamingUpdates.Add(update);
+				generatedCodeBuilder.Append(update?.Text ?? "");
+			}
 
-			if (hasAssistantStarter && response != null)
+			if (hasAssistantStarter)
 				generatedCodeBuilder.Insert(0, settings.AssistantStarter);
 		}
 
-		// Show actual token usage
+		// Convert streaming updates to ChatResponse to get usage information
+		var response = streamingUpdates.ToChatResponse();
 
+		// Show actual token usage from API response (more accurate) or fall back to local estimates
 		var responseText = response?.Text ?? "";
-		var responseTokens = CountTokens(responseText);
-		var totalTokens = inputTokens + responseTokens;
+		var apiUsage = response?.Usage;
+
+		// Use API-reported values when available, otherwise fall back to local tokenizer estimates
+		var actualInputTokens = (int)(apiUsage?.InputTokenCount ?? inputTokens);
+		var actualOutputTokens = (int)(apiUsage?.OutputTokenCount ?? CountTokens(responseText));
+		var actualTotalTokens = (int)(apiUsage?.TotalTokenCount ?? (actualInputTokens + actualOutputTokens));
+
+		// Check for reasoning tokens in AdditionalCounts
+		var reasoningTokens = 0L;
+		if (apiUsage?.AdditionalCounts?.TryGetValue("reasoning_tokens", out reasoningTokens) != true)
+			apiUsage?.AdditionalCounts?.TryGetValue("ReasoningTokens", out reasoningTokens);
 
 		// Update cumulative counters
-		_cumulativeInputTokens += inputTokens;
-		_cumulativeOutputTokens += responseTokens;
-		_cumulativeTotalTokens += totalTokens;
+		_cumulativeInputTokens += actualInputTokens;
+		_cumulativeOutputTokens += actualOutputTokens;
+		_cumulativeReasoningTokens += reasoningTokens;
+		_cumulativeTotalTokens += actualTotalTokens;
 
-		LogVerboseDetail($"Actual output: {responseTokens} tokens (estimated: {estimatedResponseTokens})");
-		LogVerboseDetail($"Total: {totalTokens} tokens (input: {inputTokens} + output: {responseTokens})");
+		var usageSource = apiUsage != null ? "API" : "estimated";
+		LogVerboseDetail($"Output: {actualOutputTokens} tokens ({usageSource}, local estimate: {estimatedResponseTokens})");
+		if (reasoningTokens > 0)
+			LogVerboseDetail($"Reasoning tokens: {reasoningTokens}");
+		LogVerboseDetail($"Total: {actualTotalTokens} tokens (input: {actualInputTokens} + output: {actualOutputTokens})");
 
-		// Show cumulative totals when Verbose or ShowProgress is enabled
-		if ((Verbose || showProgress) && !settings.DryRun)
-			LogVerboseInfo($"CUMULATIVE: Input={_cumulativeInputTokens}, Output={_cumulativeOutputTokens}, Total={_cumulativeTotalTokens}");
 
 		if (settings.WriteResponseToConsole ?? false)
 		{
@@ -486,6 +495,18 @@ internal static class Program
 		{
 			// Standard output: response in cyan
 			LogResult(responseText);
+		}
+
+		// Show per-file and cumulative token totals when Verbose or ShowProgress is enabled
+		if ((Verbose || showProgress) && !settings.DryRun)
+		{
+			// Per-file tokens (6-digit fixed width for alignment)
+			var fileReasoningPart = reasoningTokens > 0 ? $"   [dim]🧠 {reasoningTokens,6:N0}[/]" : "";
+			AnsiConsole.MarkupLine($"[gray]File:    {stopwatch.Elapsed:hh':'mm':'ss}   [/][blue]↑ {actualOutputTokens,6:N0}[/]   [cyan]↓ {actualInputTokens,6:N0}[/]{fileReasoningPart}   [yellow]Σ {actualTotalTokens,6:N0}[/]");
+
+			// Cumulative tokens (6-digit fixed width for alignment)
+			var cumulativeReasoningPart = _cumulativeReasoningTokens > 0 ? $" [dim]🧠 {_cumulativeReasoningTokens,6:N0}[/]" : "";
+			AnsiConsole.MarkupLine($"[gray]Total:   {_totalStopwatch.Elapsed:hh':'mm':'ss}   [/][blue]↑ {_cumulativeOutputTokens,6:N0}[/]   [cyan]↓ {_cumulativeInputTokens,6:N0}[/]{cumulativeReasoningPart}   [yellow]Σ {_cumulativeTotalTokens,6:N0}[/]");
 		}
 
 		return true;
