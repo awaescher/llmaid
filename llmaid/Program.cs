@@ -20,6 +20,11 @@ internal static class Program
 	internal static int CurrentFileIndex { get; set; }
 	internal static bool Verbose { get; set; }
 
+	// Cumulative token tracking across all files
+	private static long _cumulativeInputTokens;
+	private static long _cumulativeOutputTokens;
+	private static long _cumulativeTotalTokens;
+
 	// Tokenizer for accurate token estimation (o200k_base is the standard for GPT-4o and similar models)
 
 	private static readonly Tokenizer Tokenizer = TiktokenTokenizer.CreateForModel("gpt-4o");
@@ -57,6 +62,11 @@ internal static class Program
 		await settings.Validate(requireProfile: false);
 
 		Verbose = settings.Verbose ?? false;
+
+		// Initialize cumulative token counters
+		_cumulativeInputTokens = 0;
+		_cumulativeOutputTokens = 0;
+		_cumulativeTotalTokens = 0;
 
 		Log.Logger = new LoggerConfiguration()
 			.WriteTo.File($"./logs/{DateTime.Now:yyyy-MM-dd-hh-mm-ss}.log")
@@ -137,6 +147,17 @@ internal static class Program
 
 		LogVerboseInfo("Finished in " + totalStopWatch.Elapsed.ToString());
 		LogVerboseInfo($"{errors} error{(errors == 1 ? "" : "s")} occured.");
+
+		// Final token summary (always shown in verbose mode, also in normal mode if ShowProgress is enabled)
+		if ((Verbose || (settings.ShowProgress ?? true)) && !settings.DryRun)
+		{
+			LogVerboseInfo("");
+			LogVerboseInfo("=== FINAL TOKEN SUMMARY ===");
+			LogVerboseInfo($"Total Input Tokens:  {_cumulativeInputTokens:N0}");
+			LogVerboseInfo($"Total Output Tokens: {_cumulativeOutputTokens:N0}");
+			LogVerboseInfo($"Total Tokens:       {_cumulativeTotalTokens:N0}");
+			LogVerboseInfo("==========================");
+		}
 	}
 
 	/// <summary>
@@ -243,11 +264,11 @@ internal static class Program
 			// Handle toggle flags: when specified without value, they default to true
 			if (context.ParseResult.FindResultFor(preserveWhitespaceOption) is not null)
 				settings.PreserveWhitespace = context.ParseResult.GetValueForOption(preserveWhitespaceOption) ?? true;
-	
+
 			// Handle toggle flags: when specified without value, they default to true (but inverted: --showProgress false hides it)
 			if (context.ParseResult.FindResultFor(showProgressOption) is not null)
 				settings.ShowProgress = context.ParseResult.GetValueForOption(showProgressOption) ?? true;
-	
+
 			context.ExitCode = 0;
 		});
 
@@ -337,9 +358,9 @@ internal static class Program
 		var generatedCodeBuilder = new StringBuilder();
 
 		ChatResponseUpdate? response = null;
-	
+
 		var showProgress = settings.ShowProgress ?? true;
-	
+
 		if (showProgress)
 		{
 			await AnsiConsole.Progress()
@@ -350,32 +371,32 @@ internal static class Program
 					var sendTask = ctx.AddTask("[green]Sending[/]");
 					var waitTask = ctx.AddTask("[green]Waiting[/]");
 					var receiveTask = ctx.AddTask("[green]Receiving[/]");
-	
+
 					while (!ctx.IsFinished)
 					{
 						sendTask.Increment(100);
-	
+
 						messages.Add(new ChatMessage(ChatRole.User, userPrompt));
-	
+
 						if (!string.IsNullOrEmpty(retryMessage))
 							messages.Add(new ChatMessage(ChatRole.User, retryMessage));
-	
+
 						var hasAssistantStarter = !string.IsNullOrWhiteSpace(settings.AssistantStarter);
 						if (hasAssistantStarter)
 							messages.Add(new ChatMessage(ChatRole.Assistant, settings.AssistantStarter));
-	
+
 						response = await ChatClient.GetStreamingResponseAsync(messages, options, cancellationToken).StreamToEndAsync(token =>
 						{
 							if (waitTask.Value == 0)
 								waitTask.Increment(100);
-	
+
 							generatedCodeBuilder.Append(token?.Text ?? "");
 							receiveTask.Value = CalculateProgress(generatedCodeBuilder.Length, estimatedResponseTokens);
 						}).ConfigureAwait(false);
-	
+
 						if (hasAssistantStarter && response != null)
 							generatedCodeBuilder.Insert(0, settings.AssistantStarter);
-	
+
 						receiveTask.Value = 100;
 					}
 				});
@@ -384,19 +405,19 @@ internal static class Program
 		{
 			// Process without progress indicator
 			messages.Add(new ChatMessage(ChatRole.User, userPrompt));
-	
+
 			if (!string.IsNullOrEmpty(retryMessage))
 				messages.Add(new ChatMessage(ChatRole.User, retryMessage));
-	
+
 			var hasAssistantStarter = !string.IsNullOrWhiteSpace(settings.AssistantStarter);
 			if (hasAssistantStarter)
 				messages.Add(new ChatMessage(ChatRole.Assistant, settings.AssistantStarter));
-	
+
 			response = await ChatClient.GetStreamingResponseAsync(messages, options, cancellationToken).StreamToEndAsync(token =>
 			{
 				generatedCodeBuilder.Append(token?.Text ?? "");
 			}).ConfigureAwait(false);
-	
+
 			if (hasAssistantStarter && response != null)
 				generatedCodeBuilder.Insert(0, settings.AssistantStarter);
 		}
@@ -406,8 +427,18 @@ internal static class Program
 		var responseText = response?.Text ?? "";
 		var responseTokens = CountTokens(responseText);
 		var totalTokens = inputTokens + responseTokens;
+
+		// Update cumulative counters
+		_cumulativeInputTokens += inputTokens;
+		_cumulativeOutputTokens += responseTokens;
+		_cumulativeTotalTokens += totalTokens;
+
 		LogVerboseDetail($"Actual output: {responseTokens} tokens (estimated: {estimatedResponseTokens})");
 		LogVerboseDetail($"Total: {totalTokens} tokens (input: {inputTokens} + output: {responseTokens})");
+
+		// Show cumulative totals when Verbose or ShowProgress is enabled
+		if ((Verbose || showProgress) && !settings.DryRun)
+			LogVerboseInfo($"CUMULATIVE: Input={_cumulativeInputTokens}, Output={_cumulativeOutputTokens}, Total={_cumulativeTotalTokens}");
 
 		if (settings.WriteResponseToConsole ?? false)
 		{
@@ -678,19 +709,19 @@ internal static class Program
 	{
 		// First, read the file bytes to check for BOM and use content-based detection
 		var fileBytes = await File.ReadAllBytesAsync(file, cancellationToken);
-		
+
 		if (fileBytes.Length == 0)
 			return (string.Empty, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 
 		// Use UTF-Unknown for encoding detection (handles both BOM and content-based detection)
 		var detectionResult = CharsetDetector.DetectFromBytes(fileBytes);
-		
+
 		Encoding encoding;
 		if (detectionResult.Detected != null)
 		{
 			var detectedEncoding = detectionResult.Detected.Encoding;
 			var hasBom = detectionResult.Detected.HasBOM;
-			
+
 			// ASCII is a subset of UTF-8, treat as UTF-8 without BOM
 			// For UTF-8, preserve BOM status
 			if (detectedEncoding.WebName.Equals("us-ascii", StringComparison.OrdinalIgnoreCase))
@@ -710,7 +741,7 @@ internal static class Program
 		using var stream = new MemoryStream(fileBytes);
 		using var reader = new StreamReader(stream, encoding, detectEncodingFromByteOrderMarks: true);
 		var content = await reader.ReadToEndAsync(cancellationToken);
-		
+
 		return (content, encoding);
 	}
 }
