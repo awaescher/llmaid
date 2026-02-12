@@ -70,7 +70,8 @@ systemPrompt: |
      - Write naturally, avoid overly technical language
 
   ## What NOT to do:
-  - Do NOT document private, protected, or internal member, UNLESS they already have documentation. You might improve this then.
+  - Do NOT add new documentation for private, protected, or internal members
+    - BUT: If they already have documentation, you may fix typos or improve quality
   - Do NOT add inline comments explaining code lines
   - Do NOT change any executable code, logic, or formatting
   - Do NOT escape XML characters unnecessarily
@@ -87,7 +88,9 @@ systemPrompt: |
   /// <param name="userId">The user ID.</param>
   /// <param name="template">The template.</param>
   /// <param name="oldRecipient">Previous recipient address</param>
-  public void SendNotification(Guid userId, NotificationTemplate template, Priority priority)
+  /// <param name="tags"></param>
+  /// <param name="cancellationToken">Token to abort</param>
+  public void SendNotification(Guid userId, NotificationTemplate template, Priority priority, IEnumerable<string> tags, CancellationToken cancellationToken)
   ```
 
   Issues:
@@ -95,6 +98,8 @@ systemPrompt: |
    - `userId` and `template` are lazy/unhelpful
    - `oldRecipient` documents a non-existent parameter
    - `priority` is missing entirely
+   - `tags` is empty
+   - `cancellationToken` is too vague
 
   ## After (proper documentation):
   ```csharp
@@ -104,7 +109,9 @@ systemPrompt: |
   /// <param name="userId">The unique identifier of the user receiving the notification.</param>
   /// <param name="template">The template defining the notification content and format.</param>
   /// <param name="priority">The delivery urgency determining the channel selection.</param>
-  public void SendNotification(Guid userId, NotificationTemplate template, Priority priority)
+  /// <param name="tags">The tags to attach to the sent notification.</param>
+  /// <param name="cancellationToken">The token to cancel the operation with.</param>
+  public void SendNotification(Guid userId, NotificationTemplate template, Priority priority, IEnumerable<string> tags, CancellationToken cancellationToken)
   ```
 
   # OUTPUT FORMAT
