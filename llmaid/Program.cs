@@ -139,19 +139,6 @@ internal static class Program
 				await Task.Delay(TimeSpan.FromSeconds(cooldownSeconds), cancellationToken);
 			}
 		}
-
-		// Final token summary (always shown in verbose mode, also in normal mode if ShowProgress is enabled)
-		if ((Verbose || (settings.ShowProgress ?? true)) && !settings.DryRun)
-		{
-			LogVerboseInfo("");
-			LogVerboseInfo("=== FINAL TOKEN SUMMARY ===");
-			LogVerboseInfo($"Total Input Tokens:     {_cumulativeInputTokens,6:N0}");
-			LogVerboseInfo($"Total Output Tokens:    {_cumulativeOutputTokens,6:N0}");
-			if (_cumulativeReasoningTokens > 0)
-				LogVerboseInfo($"Total Reasoning Tokens: {_cumulativeReasoningTokens,6:N0}");
-			LogVerboseInfo($"Total Tokens:           {_cumulativeTotalTokens,6:N0}");
-			LogVerboseInfo("==========================");
-		}
 	}
 
 	/// <summary>
