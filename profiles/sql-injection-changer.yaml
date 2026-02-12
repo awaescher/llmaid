@@ -28,33 +28,47 @@ systemPrompt: |
 
   ## When to CHANGE (all conditions must be true):
   1. The string is clearly an SQL statement (contains SELECT, INSERT, UPDATE, DELETE, WHERE, etc.)
-  2. A variable is concatenated with single quotes around it: `'" + variable + "'`
+  2. A variable is concatenated or interpolated with single quotes around it
   3. The variable is NOT already wrapped in `MakeSqlValue()` or `SqlTools.MakeSqlValue()`
 
+  ## Supported Patterns:
+
+  ### Pattern 1: String Concatenation
+  ```csharp
+  "SELECT * FROM Users WHERE Name = '" + userName + "'"
+  ```
+
+  ### Pattern 2: String.Format
+  ```csharp
+  String.Format("SELECT * FROM Users WHERE Name = '{0}'", userName)
+  ```
+
+  ### Pattern 3: Interpolated Strings
+  ```csharp
+  $"SELECT * FROM Users WHERE Name = '{userName}'"
+  ```
+
+  ### Pattern 4: StringBuilder.Append
+  ```csharp
+  sb.Append("'" + userName + "'")
+  ```
+
   ## When to KEEP UNCHANGED:
-  - Non-SQL strings (regular string concatenation)
+  - Non-SQL strings (regular string concatenation without SQL keywords)
   - Numeric values (no quotes): `"WHERE id=" + id` → keep as-is
   - Already sanitized: `SqlTools.MakeSqlValue(x, ...)` → keep as-is
+  - Variables without quotes around them in SQL context
 
   # TRANSFORMATION
 
-  BEFORE:
-  ```
-  "SELECT * FROM Users WHERE Name = '" + userName + "' AND Active = 1"
-  ```
-
-  AFTER:
-  ```
-  "SELECT * FROM Users WHERE Name = " + SqlTools.MakeSqlValue(userName, SqlDataType.VarChar) + " AND Active = 1"
-  ```
-
-  Steps:
-  1. Remove the single quotes `'` around the variable in the SQL string
+  Steps for ALL patterns:
+  1. Remove the single quotes `'` around the variable placeholder
   2. Wrap variable with `SqlTools.MakeSqlValue(variable, SqlDataType.VarChar)`
 
   # MORE EXAMPLES
 
-  CHANGE this:
+  ## Pattern 1: Concatenation
+  CHANGE:
   ```csharp
   sql = "INSERT INTO Log (Msg) VALUES ('" + message + "')"
   ```
@@ -63,12 +77,42 @@ systemPrompt: |
   sql = "INSERT INTO Log (Msg) VALUES (" + SqlTools.MakeSqlValue(message, SqlDataType.VarChar) + ")"
   ```
 
-  DO NOT CHANGE this (numeric, no quotes):
+  ## Pattern 2: String.Format
+  CHANGE:
+  ```csharp
+  sql = String.Format("SELECT * FROM Users WHERE Name = '{0}' AND Age > {1}", name, minAge)
+  ```
+  TO:
+  ```csharp
+  sql = "SELECT * FROM Users WHERE Name = " + SqlTools.MakeSqlValue(name, SqlDataType.VarChar) + " AND Age > " + minAge
+  ```
+
+  ## Pattern 3: Interpolated Strings
+  CHANGE:
+  ```csharp
+  sql = $"INSERT INTO Orders (Customer) VALUES ('{customerName}')"
+  ```
+  TO:
+  ```csharp
+  sql = "INSERT INTO Orders (Customer) VALUES (" + SqlTools.MakeSqlValue(customerName, SqlDataType.VarChar) + ")"
+  ```
+
+  ## Pattern 4: StringBuilder
+  CHANGE:
+  ```csharp
+  sb.Append("INSERT INTO Log (Msg) VALUES ('" + message + "')")
+  ```
+  TO:
+  ```csharp
+  sb.Append("INSERT INTO Log (Msg) VALUES (" + SqlTools.MakeSqlValue(message, SqlDataType.VarChar) + ")")
+  ```
+
+  DO NOT CHANGE (numeric, no quotes):
   ```csharp
   sql = "SELECT * FROM Users WHERE Id = " + userId
   ```
 
-  DO NOT CHANGE this (already safe):
+  DO NOT CHANGE (already safe):
   ```csharp
   sql = "SELECT * FROM Users WHERE Name = " + SqlTools.MakeSqlValue(name, SqlDataType.VarChar)
   ```
