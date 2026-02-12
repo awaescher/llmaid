@@ -1,7 +1,7 @@
 # Code Documenter Profile
 # Adds or improves documentation for public symbols in source code
 
-model: deepseek-coder-v2:16b
+model: gpt-oss:120b
 temperature: 0.25
 applyCodeblock: true
 assistantStarter: ""

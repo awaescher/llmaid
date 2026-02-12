@@ -1,7 +1,7 @@
 # Wiki Proofreader Profile
 # Reviews and improves documentation and wiki content
 
-model: gpt-4o
+model: gpt-oss:120b
 temperature: 0.3
 applyCodeblock: true
 maxRetries: 1

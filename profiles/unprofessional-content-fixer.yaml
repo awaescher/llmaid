@@ -1,7 +1,7 @@
 # Unprofessional Content Fixer Profile
 # Fixes inappropriate language, typos, and security issues in code
 
-model: gpt-4o
+model: gpt-oss:120b
 temperature: 0.3
 applyCodeblock: true
 assistantStarter: ""

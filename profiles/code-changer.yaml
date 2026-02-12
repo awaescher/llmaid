@@ -1,7 +1,7 @@
 # Code Changer Profile (C#)
 # Modernizes C# code with new collection initializers
 
-model: deepseek-coder-v2:16b
+model: gpt-oss:120b
 temperature: 0.5
 applyCodeblock: true
 maxRetries: 1

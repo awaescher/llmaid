@@ -1,7 +1,7 @@
 # NDA Checker Profile
 # Evaluates Non-Disclosure Agreements for Anything-Finance
 
-model: gpt-4o
+model: gpt-oss:120b
 temperature: 0.3
 applyCodeblock: false
 maxRetries: 1

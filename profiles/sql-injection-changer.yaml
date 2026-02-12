@@ -3,7 +3,7 @@
 
 temperature: 0.0
 applyCodeblock: true
-model: qwen2.5-coder:32b
+model: gpt-oss:120b
 assistantStarter: ""
 maxRetries: 1
 
