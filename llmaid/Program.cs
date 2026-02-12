@@ -346,8 +346,8 @@ internal static class Program
 		var options = new ChatOptions { Temperature = settings.Temperature }
 			.AddOllamaOption(OllamaOption.NumCtx, Math.Max(estimatedContextLength, settings.OllamaMinNumCtx)); // use a minimum context length for the Ollama provider to prevent unnecessary model reloads
 
-		LogVerboseDetail($"Input tokens: {inputTokens} (system: {systemPromptTokens}, user: {userPromptTokens})");
-		LogVerboseDetail($"Estimated output tokens: {estimatedResponseTokens}");
+		LogVerboseDetail($"Calculated input tokens:  {inputTokens} (system: {systemPromptTokens}, user: {userPromptTokens})");
+		LogVerboseDetail($"Estimated output tokens:  {estimatedResponseTokens}");
 		LogVerboseDetail($"Estimated context length: {estimatedContextLength} tokens");
 
 		var generatedCodeBuilder = new StringBuilder();
@@ -442,12 +442,10 @@ internal static class Program
 		_cumulativeReasoningTokens += reasoningTokens;
 		_cumulativeTotalTokens += actualTotalTokens;
 
-		var usageSource = apiUsage != null ? "API" : "estimated";
-		LogVerboseDetail($"Output: {actualOutputTokens} tokens ({usageSource}, local estimate: {estimatedResponseTokens})");
-		if (reasoningTokens > 0)
-			LogVerboseDetail($"Reasoning tokens: {reasoningTokens}");
-		LogVerboseDetail($"Total: {actualTotalTokens} tokens (input: {actualInputTokens} + output: {actualOutputTokens})");
-
+		if (apiUsage is null)
+			LogVerboseDetail("No API usage tokens found");
+		else
+			LogVerboseDetail($"Actual API usage tokens: {actualTotalTokens} (input: {actualInputTokens} + output: {actualOutputTokens} + reasoning: {reasoningTokens})");
 
 		if (settings.WriteResponseToConsole ?? false)
 		{
