@@ -35,9 +35,8 @@ internal static class Program
 	private static Stopwatch _totalStopwatch = new();
 
 	// Display symbols for token usage output
-	private const string SYM_UP = "\u2191";       // ↑ output tokens (sent to model)
-	private const string SYM_DOWN = "\u2193";     // ↓ input tokens (received from model)
-	private const string SYM_THINKING = "\u2234"; // ∴ reasoning tokens (therefore = thinking)
+	private const string SYM_UP = "\u2191";       // ↑ input tokens (sent to model)
+	private const string SYM_DOWN = "\u2193";     // ↓ output tokens (received from model)
 	private const string SYM_PIPE = "\u2502";     // │ separator
 	private const string SYM_TOTAL = "\u03A3";    // Σ total tokens
 
@@ -355,7 +354,7 @@ internal static class Program
 		var options = new ChatOptions { Temperature = settings.Temperature }
 			.AddOllamaOption(OllamaOption.NumCtx, Math.Max(estimatedContextLength, settings.OllamaMinNumCtx)); // use a minimum context length for the Ollama provider to prevent unnecessary model reloads
 
-		LogVerboseDetail($"Calculated input tokens:  {inputTokens} (system: {systemPromptTokens}, user: {userPromptTokens}{(isImage ? " estimated for image" : "")})");
+		LogVerboseDetail($"Calculated input tokens:  {inputTokens} (prompt: {systemPromptTokens}, file: {userPromptTokens}{(isImage ? " estimated for image" : "")})");
 		LogVerboseDetail($"Estimated output tokens:  {estimatedResponseTokens}");
 		LogVerboseDetail($"Estimated context length: {estimatedContextLength} tokens");
 
@@ -533,7 +532,10 @@ internal static class Program
 		if (apiUsage is null)
 			LogVerboseDetail("No API usage tokens found");
 		else
-			LogVerboseDetail($"Actual API usage tokens: {actualTotalTokens} (input: {actualInputTokens} + output: {actualOutputTokens} + reasoning: {reasoningTokens})");
+		{
+			var reasoningPart = reasoningTokens > 0 ? $", of which reasoning: {reasoningTokens}" : "";
+			LogVerboseDetail($"Actual API usage tokens: {actualTotalTokens} (input: {actualInputTokens} + output: {actualOutputTokens}{reasoningPart})");
+		}
 
 		if (settings.WriteResponseToConsole ?? false)
 		{
@@ -563,7 +565,9 @@ internal static class Program
 				var encoding = originalEncoding ?? new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 				await File.WriteAllTextAsync(file, finalCode, encoding, cancellationToken);
 				// Standard output: result in cyan
-				LogResult($"{encoding.GetByteCount(finalCode) + encoding.GetPreamble().Length} bytes written");
+				var writtenBytes = encoding.GetByteCount(finalCode) + encoding.GetPreamble().Length;
+				var writtenTokens = CountTokens(finalCode);
+				LogResult($"{writtenBytes} bytes written ({writtenTokens} tokens)");
 			}
 			else
 			{
@@ -588,14 +592,10 @@ internal static class Program
 		if ((Verbose || showProgress) && !settings.DryRun)
 		{
 			// Per-file tokens (6-digit fixed width for alignment)
-			var fileDisplayTotal = actualTotalTokens + (int)reasoningTokens;
-			var fileReasoningPart = reasoningTokens > 0 ? $"   [white]{SYM_THINKING} {reasoningTokens,6:N0}[/]" : "";
-			AnsiConsole.MarkupLine($"[gray]File:    {stopwatch.Elapsed:hh':'mm':'ss}   [/][blue]{SYM_UP} {actualOutputTokens,6:N0}[/]{fileReasoningPart}   [cyan]{SYM_DOWN} {actualInputTokens,6:N0}[/]   [gray]{SYM_PIPE}[/]   [yellow]{SYM_TOTAL} {fileDisplayTotal,6:N0}[/]");
+			AnsiConsole.MarkupLine($"[gray]File:    {stopwatch.Elapsed:hh':'mm':'ss}   [/][blue]{SYM_UP} {actualInputTokens,6:N0}[/]   [cyan]{SYM_DOWN} {actualOutputTokens,6:N0}[/]   [gray]{SYM_PIPE}[/]   [yellow]{SYM_TOTAL} {actualTotalTokens,6:N0}[/]");
 
 			// Cumulative tokens (6-digit fixed width for alignment)
-			var cumulativeDisplayTotal = _cumulativeTotalTokens + _cumulativeReasoningTokens;
-			var cumulativeReasoningPart = _cumulativeReasoningTokens > 0 ? $"   [white]{SYM_THINKING} {_cumulativeReasoningTokens,6:N0}[/]" : "";
-			AnsiConsole.MarkupLine($"[gray]Total:   {_totalStopwatch.Elapsed:hh':'mm':'ss}   [/][blue]{SYM_UP} {_cumulativeOutputTokens,6:N0}[/]{cumulativeReasoningPart}   [cyan]{SYM_DOWN} {_cumulativeInputTokens,6:N0}[/]   [gray]{SYM_PIPE}[/]   [yellow]{SYM_TOTAL} {cumulativeDisplayTotal,6:N0}[/]");
+			AnsiConsole.MarkupLine($"[gray]Total:   {_totalStopwatch.Elapsed:hh':'mm':'ss}   [/][blue]{SYM_UP} {_cumulativeInputTokens,6:N0}[/]   [cyan]{SYM_DOWN} {_cumulativeOutputTokens,6:N0}[/]   [gray]{SYM_PIPE}[/]   [yellow]{SYM_TOTAL} {_cumulativeTotalTokens,6:N0}[/]");
 		}
 
 		return true;
@@ -880,13 +880,12 @@ internal static class Program
 
 	private static int EstimateResponseTokens(Settings settings, string code)
 	{
-		var systemPromptTokens = CountTokens(settings.SystemPrompt ?? string.Empty);
 		var codeTokens = CountTokens(code);
 
 		if (settings.ApplyCodeblock ?? true)
-			return (int)(systemPromptTokens + codeTokens * 1.25f);  // The LLM will extend/modify the code
+			return (int)(codeTokens * 1.25f);  // The LLM will extend/modify the code
 		else
-			return (int)(systemPromptTokens + codeTokens * 0.25f);  // Only short responses expected
+			return (int)(codeTokens * 0.25f);  // Only short responses expected
 	}
 
 	private static int EstimateContextLength(string originalCode, string systemPrompt, int estimatedResponseTokens)
