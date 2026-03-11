@@ -1,5 +1,5 @@
-using Shouldly;
 using llmaid;
+using Shouldly;
 
 namespace Tests;
 
