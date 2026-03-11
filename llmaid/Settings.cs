@@ -163,6 +163,14 @@ public class Settings
 	public bool? ShowProgress { get; set; } = true;
 
 	/// <summary>
+	/// Gets or sets the maximum dimension (width or height) for images.
+	/// Images are always resized to fit within this dimension while preserving aspect ratio.
+	/// Default is 2048 pixels.
+	/// </summary>
+	[JsonPropertyName("maxImageDimension")]
+	public int? MaxImageDimension { get; set; } = 2048;
+
+	/// <summary>
 	/// Validates the current arguments, ensuring all required fields are properly set.
 	/// </summary>
 	/// <param name="requireProfile">If true, validates that a profile file exists. Set to false when running purely from CLI.</param>

@@ -9,6 +9,7 @@ using Microsoft.ML.Tokenizers;
 using OllamaSharp;
 using OllamaSharp.Models;
 using Serilog;
+using SkiaSharp;
 using Spectre.Console;
 using UtfUnknown;
 namespace llmaid;
@@ -16,6 +17,12 @@ namespace llmaid;
 internal static class Program
 {
 	internal static IChatClient ChatClient { get; set; } = null!;
+
+	// Supported image file extensions
+	private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+	{
+		".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".svg", ".ico", ".avif"
+	};
 	internal static int FileCount { get; set; }
 	internal static int CurrentFileIndex { get; set; }
 	internal static bool Verbose { get; set; }
@@ -273,51 +280,54 @@ internal static class Program
 	private static async Task<bool> ProcessFile(string file, string systemPromptTemplate, string retryMessage, Settings settings, CancellationToken cancellationToken)
 	{
 		var stopwatch = Stopwatch.StartNew();
-		string originalCode = string.Empty;
-		Encoding originalEncoding;
+		var isImage = IsImageFile(file);
+		string? originalCode = null;
+		Encoding? originalEncoding = null;
 
-		try
+		// Handle image files differently from text files
+		if (isImage)
 		{
-			(originalCode, originalEncoding) = await ReadFileWithEncodingAsync(file, cancellationToken);
-			LogVerboseDetail($"Detected encoding: {originalEncoding.EncodingName}");
+			var fileInfo = new FileInfo(file);
+			LogVerboseDetail($"Processing image file ({fileInfo.Length / 1024.0:0.#} kB)");
 		}
-		catch (Exception ex)
+		else
 		{
-			LogError($"Could not read {file}: {ex.Message}");
-			return false;
+			// Text file processing
+			try
+			{
+				(originalCode, originalEncoding) = await ReadFileWithEncodingAsync(file, cancellationToken);
+				LogVerboseDetail($"Detected encoding: {originalEncoding.EncodingName}");
+			}
+			catch (Exception ex)
+			{
+				LogError($"Could not read {file}: {ex.Message}");
+				return false;
+			}
+
+			if (string.IsNullOrEmpty(originalCode))
+			{
+				LogWarning($"Skipped file {file}: No content.");
+				return false;
+			}
+
+			var fileTokens = CountTokens(originalCode);
+			var maxTokens = settings.MaxFileTokens ?? 102400;
+			if (fileTokens > maxTokens)
+			{
+				LogWarning($"Skipped file {file}: {fileTokens} tokens exceeds maximum of {maxTokens} tokens.");
+				return false;
+			}
 		}
 
-		if (originalCode.Length < 1)
-		{
-			LogWarning($"Skipped file {file}: No content.");
-			return false;
-		}
-
-		var fileTokens = CountTokens(originalCode);
-		var maxTokens = settings.MaxFileTokens ?? 102400;
-		if (fileTokens > maxTokens)
-		{
-			LogWarning($"Skipped file {file}: {fileTokens} tokens exceeds maximum of {maxTokens} tokens.");
-			return false;
-		}
-
-		var codeLanguage = GetCodeLanguageByFileExtension(Path.GetExtension(file));
+		var codeLanguage = isImage ? "" : GetCodeLanguageByFileExtension(Path.GetExtension(file));
 
 		var systemPrompt = systemPromptTemplate
-			.Replace("%CODE%", originalCode)
+			.Replace("%CODE%", originalCode ?? "")
 			.Replace("%CODELANGUAGE%", codeLanguage)
 			.Replace("%FILENAME%", Path.GetFileName(file));
 
-		var userPrompt = """
-%FILENAME%
-``` %CODELANGUAGE%
-%CODE%
-```
-""";
-		userPrompt = userPrompt
-			.Replace("%CODE%", originalCode)
-			.Replace("%CODELANGUAGE%", codeLanguage)
-			.Replace("%FILENAME%", Path.GetFileName(file));
+		// Build user content (multimodal for images, text for code)
+		var userContent = await BuildUserContentAsync(file, originalCode, settings, cancellationToken);
 
 		var messages = new List<ChatMessage>
 		{
@@ -325,15 +335,20 @@ internal static class Program
 		};
 
 		var systemPromptTokens = CountTokens(systemPrompt);
-		var userPromptTokens = CountTokens(userPrompt);
+		// For images, we estimate tokens differently (image tokens vary by provider, typically ~85-170 tokens for small images)
+		var userPromptTokens = isImage ? 500 : CountTokens(originalCode ?? "");
 		var inputTokens = systemPromptTokens + userPromptTokens;
-		var estimatedResponseTokens = EstimateResponseTokens(settings, originalCode);
-		var estimatedContextLength = EstimateContextLength(originalCode, systemPrompt, estimatedResponseTokens);
+		var estimatedResponseTokens = isImage
+			? CountTokens(settings.SystemPrompt ?? "") + 200  // Short response expected for image analysis
+			: EstimateResponseTokens(settings, originalCode ?? "");
+		var estimatedContextLength = isImage
+			? Math.Max(4096, systemPromptTokens + 1000 + estimatedResponseTokens)  // Images need more context
+			: EstimateContextLength(originalCode ?? "", systemPrompt, estimatedResponseTokens);
 
 		var options = new ChatOptions { Temperature = settings.Temperature }
 			.AddOllamaOption(OllamaOption.NumCtx, Math.Max(estimatedContextLength, settings.OllamaMinNumCtx)); // use a minimum context length for the Ollama provider to prevent unnecessary model reloads
 
-		LogVerboseDetail($"Calculated input tokens:  {inputTokens} (system: {systemPromptTokens}, user: {userPromptTokens})");
+		LogVerboseDetail($"Calculated input tokens:  {inputTokens} (system: {systemPromptTokens}, user: {userPromptTokens}{(isImage ? " estimated for image" : "")})");
 		LogVerboseDetail($"Estimated output tokens:  {estimatedResponseTokens}");
 		LogVerboseDetail($"Estimated context length: {estimatedContextLength} tokens");
 
@@ -358,7 +373,8 @@ internal static class Program
 					{
 						sendTask.Increment(100);
 
-						messages.Add(new ChatMessage(ChatRole.User, userPrompt));
+						// Add user message with multimodal content
+						messages.Add(new ChatMessage(ChatRole.User, userContent));
 
 						if (!string.IsNullOrEmpty(retryMessage))
 							messages.Add(new ChatMessage(ChatRole.User, retryMessage));
@@ -387,7 +403,7 @@ internal static class Program
 		else
 		{
 			// Process without progress indicator
-			messages.Add(new ChatMessage(ChatRole.User, userPrompt));
+			messages.Add(new ChatMessage(ChatRole.User, userContent));
 
 			if (!string.IsNullOrEmpty(retryMessage))
 				messages.Add(new ChatMessage(ChatRole.User, retryMessage));
@@ -440,14 +456,14 @@ internal static class Program
 			LogCode(responseText);
 		}
 
-		if (settings.ApplyCodeblock ?? true)
+		if ((settings.ApplyCodeblock ?? true) && !isImage)
 		{
 			var extractedCode = CodeBlockExtractor.Extract(responseText);
 			var couldExtractCode = !string.IsNullOrWhiteSpace(extractedCode);
 			if (couldExtractCode)
 			{
 				string finalCode;
-				if (settings.PreserveWhitespace ?? false)
+				if ((settings.PreserveWhitespace ?? false) && originalCode != null)
 				{
 					// Preserve original leading and trailing whitespace to avoid diff noise
 					var (leadingWhitespace, trailingWhitespace) = ExtractWhitespace(originalCode);
@@ -459,9 +475,10 @@ internal static class Program
 				}
 
 				// Write with the same encoding as the original file (preserving BOM if present)
-				await File.WriteAllTextAsync(file, finalCode, originalEncoding, cancellationToken);
+				var encoding = originalEncoding ?? new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+				await File.WriteAllTextAsync(file, finalCode, encoding, cancellationToken);
 				// Standard output: result in cyan
-				LogResult($"{originalEncoding.GetByteCount(finalCode) + originalEncoding.GetPreamble().Length} bytes written");
+				LogResult($"{encoding.GetByteCount(finalCode) + encoding.GetPreamble().Length} bytes written");
 			}
 			else
 			{
@@ -478,7 +495,7 @@ internal static class Program
 		}
 		else
 		{
-			// Standard output: response in cyan
+			// Standard output: response in cyan (used for images and when ApplyCodeblock is false)
 			LogResult(responseText);
 		}
 
@@ -654,6 +671,114 @@ internal static class Program
 		};
 	}
 
+	/// <summary>
+	/// Checks if a file is an image based on its extension.
+	/// </summary>
+	private static bool IsImageFile(string filePath)
+	{
+		var extension = Path.GetExtension(filePath);
+		return ImageExtensions.Contains(extension);
+	}
+
+	/// <summary>
+	/// Gets the MIME type for an image file based on its extension.
+	/// </summary>
+	private static string GetImageMimeType(string extension)
+	{
+		return extension.ToLowerInvariant() switch
+		{
+			".png" => "image/png",
+			".jpg" or ".jpeg" => "image/jpeg",
+			".webp" => "image/webp",
+			".gif" => "image/gif",
+			".bmp" => "image/bmp",
+			".svg" => "image/svg+xml",
+			".ico" => "image/x-icon",
+			".avif" => "image/avif",
+			_ => "application/octet-stream"
+		};
+	}
+
+	/// <summary>
+	/// Loads and resizes an image file, returning it as a DataContent for multimodal chat messages.
+	/// Always resizes to fit within maxDimension while preserving aspect ratio.
+	/// </summary>
+	private static async Task<DataContent> LoadImageContentAsync(string filePath, int maxDimension, CancellationToken cancellationToken)
+	{
+		var bytes = await File.ReadAllBytesAsync(filePath, cancellationToken);
+		var extension = Path.GetExtension(filePath).ToLowerInvariant();
+
+		// SVG files can't be resized with SkiaSharp - pass through as-is
+		if (extension == ".svg")
+		{
+			return new DataContent(bytes, "image/svg+xml");
+		}
+
+		using var originalBitmap = SKBitmap.Decode(bytes);
+		if (originalBitmap == null)
+		{
+			// If decoding fails, return original bytes
+			var mimeType = GetImageMimeType(extension);
+			return new DataContent(bytes, mimeType);
+		}
+
+		var width = originalBitmap.Width;
+		var height = originalBitmap.Height;
+
+		// Check if resizing is needed
+		if (width <= maxDimension && height <= maxDimension)
+		{
+			// No resize needed, but re-encode as JPEG for consistency
+			var mimeType = GetImageMimeType(extension);
+			return new DataContent(bytes, mimeType);
+		}
+
+		// Calculate new dimensions preserving aspect ratio
+		float scale = Math.Min((float)maxDimension / width, (float)maxDimension / height);
+		var newWidth = (int)(width * scale);
+		var newHeight = (int)(height * scale);
+
+		using var resizedBitmap = originalBitmap.Resize(new SKImageInfo(newWidth, newHeight), SKSamplingOptions.Default);
+		using var image = SKImage.FromBitmap(resizedBitmap);
+
+		// Encode as JPEG for smaller size (quality 85)
+		using var encodedData = image.Encode(SKEncodedImageFormat.Jpeg, 85);
+
+		return new DataContent(encodedData.ToArray(), "image/jpeg");
+	}
+
+	/// <summary>
+	/// Builds the user message content, handling both text and image files.
+	/// </summary>
+	private static async Task<IList<AIContent>> BuildUserContentAsync(string file, string? textContent, Settings settings, CancellationToken cancellationToken)
+	{
+		var contents = new List<AIContent>();
+		var fileName = Path.GetFileName(file);
+
+		if (IsImageFile(file))
+		{
+			// For images: Add filename as text + image content
+			contents.Add(new TextContent($"Image file: {fileName}"));
+
+			var maxDimension = settings.MaxImageDimension ?? 2048;
+			var imageContent = await LoadImageContentAsync(file, maxDimension, cancellationToken);
+			contents.Add(imageContent);
+		}
+		else
+		{
+			// For text files: Use existing code block format
+			var codeLanguage = GetCodeLanguageByFileExtension(Path.GetExtension(file));
+			var userPrompt = $"""
+				{fileName}
+				``` {codeLanguage}
+				{textContent}
+				```
+				""";
+			contents.Add(new TextContent(userPrompt));
+		}
+
+		return contents;
+	}
 
 	/// <summary>
 	/// Counts the actual number of tokens in a text using a real tokenizer.
