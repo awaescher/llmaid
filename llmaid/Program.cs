@@ -34,6 +34,13 @@ internal static class Program
 	private static long _cumulativeTotalTokens;
 	private static Stopwatch _totalStopwatch = new();
 
+	// Display symbols for token usage output
+	private const string SYM_UP = "\u2191";       // ↑ output tokens (sent to model)
+	private const string SYM_DOWN = "\u2193";     // ↓ input tokens (received from model)
+	private const string SYM_THINKING = "\u2234"; // ∴ reasoning tokens (therefore = thinking)
+	private const string SYM_PIPE = "\u2502";     // │ separator
+	private const string SYM_TOTAL = "\u03A3";    // Σ total tokens
+
 	// Tokenizer for accurate token estimation (o200k_base is the standard for GPT-4o and similar models)
 
 	private static readonly Tokenizer Tokenizer = TiktokenTokenizer.CreateForModel("gpt-4o");
@@ -373,8 +380,6 @@ internal static class Program
 
 					while (!ctx.IsFinished)
 					{
-						sendTask.Increment(100);
-
 						// Add user message with multimodal content
 						messages.Add(new ChatMessage(ChatRole.User, userContent));
 
@@ -389,6 +394,8 @@ internal static class Program
 
 						await foreach (var update in ChatClient.GetStreamingResponseAsync(messages, options, cancellationToken).ConfigureAwait(false))
 						{
+							sendTask.Increment(100);
+
 							streamingUpdates.Add(update);
 
 							// Check for reasoning content (TextReasoningContent) in the update
@@ -403,7 +410,7 @@ internal static class Program
 
 								reasoningUpdatesCount++;
 								if (reasoningTask.Value == 0)
-									reasoningTask.Increment(50); // Show activity during reasoning
+									reasoningTask.IsIndeterminate(true);
 							}
 							else if (!hasTextContent && !receivedFirstOutputToken)
 							{
@@ -412,7 +419,7 @@ internal static class Program
 								// (e.g. LM Studio with DeepSeek/Qwen models)
 								reasoningUpdatesCount++;
 								if (reasoningTask.Value == 0)
-									reasoningTask.Increment(50); // Show activity during reasoning
+									reasoningTask.IsIndeterminate(true);
 							}
 
 							if (hasTextContent)
@@ -421,6 +428,7 @@ internal static class Program
 								if (!receivedFirstOutputToken)
 								{
 									receivedFirstOutputToken = true;
+									reasoningTask.IsIndeterminate(false);
 									reasoningTask.Value = 100;
 								}
 
@@ -430,6 +438,7 @@ internal static class Program
 						}
 
 						// Ensure reasoning task is completed
+						reasoningTask.IsIndeterminate(false);
 						reasoningTask.Value = 100;
 
 						if (hasAssistantStarter)
@@ -579,12 +588,14 @@ internal static class Program
 		if ((Verbose || showProgress) && !settings.DryRun)
 		{
 			// Per-file tokens (6-digit fixed width for alignment)
-			var fileReasoningPart = reasoningTokens > 0 ? $"   [dim]🧠 {reasoningTokens,6:N0}[/]" : "";
-			AnsiConsole.MarkupLine($"[gray]File:    {stopwatch.Elapsed:hh':'mm':'ss}   [/][blue]↑ {actualOutputTokens,6:N0}[/]   [cyan]↓ {actualInputTokens,6:N0}[/]{fileReasoningPart}   [yellow]Σ {actualTotalTokens,6:N0}[/]");
+			var fileDisplayTotal = actualTotalTokens + (int)reasoningTokens;
+			var fileReasoningPart = reasoningTokens > 0 ? $"   [white]{SYM_THINKING} {reasoningTokens,6:N0}[/]" : "";
+			AnsiConsole.MarkupLine($"[gray]File:    {stopwatch.Elapsed:hh':'mm':'ss}   [/][blue]{SYM_UP} {actualOutputTokens,6:N0}[/]{fileReasoningPart}   [cyan]{SYM_DOWN} {actualInputTokens,6:N0}[/]   [gray]{SYM_PIPE}[/]   [yellow]{SYM_TOTAL} {fileDisplayTotal,6:N0}[/]");
 
 			// Cumulative tokens (6-digit fixed width for alignment)
-			var cumulativeReasoningPart = _cumulativeReasoningTokens > 0 ? $" [dim]🧠 {_cumulativeReasoningTokens,6:N0}[/]" : "";
-			AnsiConsole.MarkupLine($"[gray]Total:   {_totalStopwatch.Elapsed:hh':'mm':'ss}   [/][blue]↑ {_cumulativeOutputTokens,6:N0}[/]   [cyan]↓ {_cumulativeInputTokens,6:N0}[/]{cumulativeReasoningPart}   [yellow]Σ {_cumulativeTotalTokens,6:N0}[/]");
+			var cumulativeDisplayTotal = _cumulativeTotalTokens + _cumulativeReasoningTokens;
+			var cumulativeReasoningPart = _cumulativeReasoningTokens > 0 ? $"   [white]{SYM_THINKING} {_cumulativeReasoningTokens,6:N0}[/]" : "";
+			AnsiConsole.MarkupLine($"[gray]Total:   {_totalStopwatch.Elapsed:hh':'mm':'ss}   [/][blue]{SYM_UP} {_cumulativeOutputTokens,6:N0}[/]{cumulativeReasoningPart}   [cyan]{SYM_DOWN} {_cumulativeInputTokens,6:N0}[/]   [gray]{SYM_PIPE}[/]   [yellow]{SYM_TOTAL} {cumulativeDisplayTotal,6:N0}[/]");
 		}
 
 		return true;
