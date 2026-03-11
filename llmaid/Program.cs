@@ -201,6 +201,7 @@ internal static class Program
 		preserveWhitespaceOption.Arity = ArgumentArity.ZeroOrOne;
 		var showProgressOption = new Option<bool?>(MakeArgument(nameof(Settings.ShowProgress)), "Show progress indicator during file processing (default: true)");
 		showProgressOption.Arity = ArgumentArity.ZeroOrOne;
+		var reasoningTimeoutOption = new Option<int?>(MakeArgument(nameof(Settings.ReasoningTimeoutSeconds)), "Maximum seconds a model may spend reasoning before the request is cancelled (default: 600, 0 = disabled)");
 
 		var rootCommand = new RootCommand
 		{
@@ -223,7 +224,8 @@ internal static class Program
 			resumeAtOption,
 			ollamaMinNumCtxOption,
 			preserveWhitespaceOption,
-			showProgressOption
+			showProgressOption,
+			reasoningTimeoutOption
 		};
 
 		rootCommand.SetHandler(context =>
@@ -263,6 +265,8 @@ internal static class Program
 			if (context.ParseResult.FindResultFor(showProgressOption) is not null)
 				settings.ShowProgress = context.ParseResult.GetValueForOption(showProgressOption) ?? true;
 
+			settings.ReasoningTimeoutSeconds = context.ParseResult.GetValueForOption(reasoningTimeoutOption) ?? settings.ReasoningTimeoutSeconds;
+
 			context.ExitCode = 0;
 		});
 
@@ -281,6 +285,15 @@ internal static class Program
 		{
 			return "??? kB";
 		}
+	}
+
+	/// <summary>
+	/// Thrown when the model exceeds the configured reasoning timeout.
+	/// Used to break out of the streaming loop cleanly so the retry logic can handle it.
+	/// </summary>
+	private sealed class ReasoningTimeoutException : Exception
+	{
+		public ReasoningTimeoutException(int seconds) : base($"Model reasoning exceeded the timeout of {seconds} seconds.") { }
 	}
 
 	private static async Task<bool> ProcessFile(string file, string systemPromptTemplate, string retryMessage, Settings settings, CancellationToken cancellationToken)
@@ -366,124 +379,150 @@ internal static class Program
 
 		var showProgress = settings.ShowProgress ?? true;
 
-		if (showProgress)
+		// Reasoning timeout: how many seconds the model may stay in reasoning before we cancel
+		var reasoningTimeoutSeconds = settings.ReasoningTimeoutSeconds ?? 600;
+		var reasoningTimeoutEnabled = reasoningTimeoutSeconds > 0;
+
+		try
 		{
-			await AnsiConsole.Progress()
-				.AutoClear(true)
-				.Columns(new TaskDescriptionColumn(), new ProgressBarColumn(), new PercentageColumn(), new RemainingTimeColumn(), new SpinnerColumn())
-				.StartAsync(async ctx =>
-				{
-					var sendTask = ctx.AddTask("[green]Sending[/]");
-					var reasoningTask = ctx.AddTask("[green]Reasoning[/]");
-					var receiveTask = ctx.AddTask("[green]Receiving[/]");
-
-					while (!ctx.IsFinished)
+			if (showProgress)
+			{
+				await AnsiConsole.Progress()
+					.AutoClear(true)
+					.Columns(new TaskDescriptionColumn(), new ProgressBarColumn(), new PercentageColumn(), new RemainingTimeColumn(), new SpinnerColumn())
+					.StartAsync(async ctx =>
 					{
-						// Add user message with multimodal content
-						messages.Add(new ChatMessage(ChatRole.User, userContent));
+						var sendTask = ctx.AddTask("[green]Sending[/]");
+						var reasoningTask = ctx.AddTask("[green]Reasoning[/]");
+						var receiveTask = ctx.AddTask("[green]Receiving[/]");
 
-						if (!string.IsNullOrEmpty(retryMessage))
-							messages.Add(new ChatMessage(ChatRole.User, retryMessage));
-
-						var hasAssistantStarter = !string.IsNullOrWhiteSpace(settings.AssistantStarter);
-						if (hasAssistantStarter)
-							messages.Add(new ChatMessage(ChatRole.Assistant, settings.AssistantStarter));
-
-						var receivedFirstOutputToken = false;
-
-						await foreach (var update in ChatClient.GetStreamingResponseAsync(messages, options, cancellationToken).ConfigureAwait(false))
+						while (!ctx.IsFinished)
 						{
-							sendTask.Increment(100);
+							// Add user message with multimodal content
+							messages.Add(new ChatMessage(ChatRole.User, userContent));
 
-							streamingUpdates.Add(update);
+							if (!string.IsNullOrEmpty(retryMessage))
+								messages.Add(new ChatMessage(ChatRole.User, retryMessage));
 
-							// Check for reasoning content (TextReasoningContent) in the update
-							var hasReasoningContent = update?.Contents?.Any(c => c is TextReasoningContent) ?? false;
-							var hasTextContent = !string.IsNullOrEmpty(update?.Text);
+							var hasAssistantStarter = !string.IsNullOrWhiteSpace(settings.AssistantStarter);
+							if (hasAssistantStarter)
+								messages.Add(new ChatMessage(ChatRole.Assistant, settings.AssistantStarter));
 
-							if (hasReasoningContent)
+							var receivedFirstOutputToken = false;
+							var reasoningStopwatch = Stopwatch.StartNew();
+
+							await foreach (var update in ChatClient.GetStreamingResponseAsync(messages, options, cancellationToken).ConfigureAwait(false))
 							{
-								// Model is reasoning - collect reasoning content from TextReasoningContent
-								foreach (var content in update!.Contents.OfType<TextReasoningContent>())
-									reasoningContentBuilder.Append(content.Text ?? "");
+								sendTask.Increment(100);
 
-								reasoningUpdatesCount++;
-								if (reasoningTask.Value == 0)
-									reasoningTask.IsIndeterminate(true);
-							}
-							else if (!hasTextContent && !receivedFirstOutputToken)
-							{
-								// No TextReasoningContent and no text output yet - likely a reasoning update
-								// from an API that doesn't map reasoning_content to TextReasoningContent
-								// (e.g. LM Studio with DeepSeek/Qwen models)
-								reasoningUpdatesCount++;
-								if (reasoningTask.Value == 0)
-									reasoningTask.IsIndeterminate(true);
-							}
+								streamingUpdates.Add(update);
 
-							if (hasTextContent)
-							{
-								// First output token received - complete reasoning phase
-								if (!receivedFirstOutputToken)
+								// Check for reasoning content (TextReasoningContent) in the update
+								var hasReasoningContent = update?.Contents?.Any(c => c is TextReasoningContent) ?? false;
+								var hasTextContent = !string.IsNullOrEmpty(update?.Text);
+
+								if (hasReasoningContent)
 								{
-									receivedFirstOutputToken = true;
-									reasoningTask.IsIndeterminate(false);
-									reasoningTask.Value = 100;
+									// Model is reasoning - collect reasoning content from TextReasoningContent
+									foreach (var content in update!.Contents.OfType<TextReasoningContent>())
+										reasoningContentBuilder.Append(content.Text ?? "");
+
+									reasoningUpdatesCount++;
+									if (reasoningTask.Value == 0)
+										reasoningTask.IsIndeterminate(true);
+								}
+								else if (!hasTextContent && !receivedFirstOutputToken)
+								{
+									// No TextReasoningContent and no text output yet - likely a reasoning update
+									// from an API that doesn't map reasoning_content to TextReasoningContent
+									// (e.g. LM Studio with DeepSeek/Qwen models)
+									reasoningUpdatesCount++;
+									if (reasoningTask.Value == 0)
+										reasoningTask.IsIndeterminate(true);
 								}
 
-								generatedCodeBuilder.Append(update?.Text ?? "");
-								receiveTask.Value = CalculateProgress(generatedCodeBuilder.Length, estimatedResponseTokens);
+								if (hasTextContent)
+								{
+									// First output token received - complete reasoning phase
+									if (!receivedFirstOutputToken)
+									{
+										receivedFirstOutputToken = true;
+										reasoningStopwatch.Stop();
+										reasoningTask.IsIndeterminate(false);
+										reasoningTask.Value = 100;
+									}
+
+									generatedCodeBuilder.Append(update?.Text ?? "");
+									receiveTask.Value = CalculateProgress(generatedCodeBuilder.Length, estimatedResponseTokens);
+								}
+
+								// Check reasoning timeout (only while no output has been received yet)
+								if (!receivedFirstOutputToken && reasoningTimeoutEnabled && reasoningStopwatch.Elapsed.TotalSeconds > reasoningTimeoutSeconds)
+									throw new ReasoningTimeoutException(reasoningTimeoutSeconds);
 							}
+
+							// Ensure reasoning task is completed
+							reasoningTask.IsIndeterminate(false);
+							reasoningTask.Value = 100;
+
+							if (hasAssistantStarter)
+								generatedCodeBuilder.Insert(0, settings.AssistantStarter);
+
+							receiveTask.Value = 100;
 						}
-
-						// Ensure reasoning task is completed
-						reasoningTask.IsIndeterminate(false);
-						reasoningTask.Value = 100;
-
-						if (hasAssistantStarter)
-							generatedCodeBuilder.Insert(0, settings.AssistantStarter);
-
-						receiveTask.Value = 100;
-					}
-				});
-		}
-		else
-		{
-			// Process without progress indicator
-			messages.Add(new ChatMessage(ChatRole.User, userContent));
-
-			if (!string.IsNullOrEmpty(retryMessage))
-				messages.Add(new ChatMessage(ChatRole.User, retryMessage));
-
-			var hasAssistantStarter = !string.IsNullOrWhiteSpace(settings.AssistantStarter);
-			if (hasAssistantStarter)
-				messages.Add(new ChatMessage(ChatRole.Assistant, settings.AssistantStarter));
-
-			var receivedFirstOutputTokenNoProgress = false;
-
-			await foreach (var update in ChatClient.GetStreamingResponseAsync(messages, options, cancellationToken).ConfigureAwait(false))
-			{
-				streamingUpdates.Add(update);
-
-				var hasReasoningContent = update?.Contents?.Any(c => c is TextReasoningContent) ?? false;
-				var hasTextContent = !string.IsNullOrEmpty(update?.Text);
-
-				// Collect reasoning content from TextReasoningContent
-				foreach (var content in update?.Contents?.OfType<TextReasoningContent>() ?? [])
-					reasoningContentBuilder.Append(content.Text ?? "");
-
-				if (hasReasoningContent || (!hasTextContent && !receivedFirstOutputTokenNoProgress))
-					reasoningUpdatesCount++;
-
-				if (hasTextContent)
-				{
-					receivedFirstOutputTokenNoProgress = true;
-					generatedCodeBuilder.Append(update?.Text ?? "");
-				}
+					});
 			}
+			else
+			{
+				// Process without progress indicator
+				messages.Add(new ChatMessage(ChatRole.User, userContent));
 
-			if (hasAssistantStarter)
-				generatedCodeBuilder.Insert(0, settings.AssistantStarter);
+				if (!string.IsNullOrEmpty(retryMessage))
+					messages.Add(new ChatMessage(ChatRole.User, retryMessage));
+
+				var hasAssistantStarter = !string.IsNullOrWhiteSpace(settings.AssistantStarter);
+				if (hasAssistantStarter)
+					messages.Add(new ChatMessage(ChatRole.Assistant, settings.AssistantStarter));
+
+				var receivedFirstOutputTokenNoProgress = false;
+				var reasoningStopwatchNoProgress = Stopwatch.StartNew();
+
+				await foreach (var update in ChatClient.GetStreamingResponseAsync(messages, options, cancellationToken).ConfigureAwait(false))
+				{
+					streamingUpdates.Add(update);
+
+					var hasReasoningContent = update?.Contents?.Any(c => c is TextReasoningContent) ?? false;
+					var hasTextContent = !string.IsNullOrEmpty(update?.Text);
+
+					// Collect reasoning content from TextReasoningContent
+					foreach (var content in update?.Contents?.OfType<TextReasoningContent>() ?? [])
+						reasoningContentBuilder.Append(content.Text ?? "");
+
+					if (hasReasoningContent || (!hasTextContent && !receivedFirstOutputTokenNoProgress))
+						reasoningUpdatesCount++;
+
+					if (hasTextContent)
+					{
+						if (!receivedFirstOutputTokenNoProgress)
+							reasoningStopwatchNoProgress.Stop();
+
+						receivedFirstOutputTokenNoProgress = true;
+						generatedCodeBuilder.Append(update?.Text ?? "");
+					}
+
+					// Check reasoning timeout (only while no output has been received yet)
+					if (!receivedFirstOutputTokenNoProgress && reasoningTimeoutEnabled && reasoningStopwatchNoProgress.Elapsed.TotalSeconds > reasoningTimeoutSeconds)
+						throw new ReasoningTimeoutException(reasoningTimeoutSeconds);
+				}
+
+				if (hasAssistantStarter)
+					generatedCodeBuilder.Insert(0, settings.AssistantStarter);
+			}
+		}
+		catch (ReasoningTimeoutException ex)
+		{
+			LogWarning($"Reasoning timeout after {reasoningTimeoutSeconds}s: {ex.Message}");
+			return false;
 		}
 
 		// Convert streaming updates to ChatResponse to get usage information

@@ -163,6 +163,15 @@ public class Settings
 	public bool? ShowProgress { get; set; } = true;
 
 	/// <summary>
+	/// Gets or sets the maximum number of seconds a model is allowed to spend in the reasoning phase
+	/// before the request is cancelled. This is not an HTTP timeout — it only kicks in when no output
+	/// tokens have been received yet (i.e. the model is still reasoning).
+	/// Default is 600 seconds (10 minutes). Set to 0 to disable.
+	/// </summary>
+	[JsonPropertyName("reasoningTimeoutSeconds")]
+	public int? ReasoningTimeoutSeconds { get; set; } = 600;
+
+	/// <summary>
 	/// Gets or sets the maximum dimension (width or height) for images.
 	/// Images are always resized to fit within this dimension while preserving aspect ratio.
 	/// Default is 2048 pixels.
