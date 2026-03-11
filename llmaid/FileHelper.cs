@@ -49,13 +49,23 @@ internal static class FileHelper
 			return (string.Empty, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 
 		var detectionResult = CharsetDetector.DetectFromBytes(fileBytes);
-		var encoding = ResolveEncoding(detectionResult);
+		var detectedEncoding = ResolveEncoding(detectionResult);
 
 		using var stream = new MemoryStream(fileBytes);
-		using var reader = new StreamReader(stream, encoding, detectEncodingFromByteOrderMarks: true);
+		using var reader = new StreamReader(stream, detectedEncoding, detectEncodingFromByteOrderMarks: true);
 		var content = await reader.ReadToEndAsync(cancellationToken);
 
-		return (content, encoding);
+		// Use the encoding the StreamReader actually applied. When a BOM is present,
+		// StreamReader may switch to a different encoding than what CharsetDetector
+		// reported, so CurrentEncoding is the authoritative source.
+		var actualEncoding = reader.CurrentEncoding;
+
+		// Preserve BOM status: if the file had a BOM (preamble bytes at the start),
+		// make sure the returned encoding will emit it again on write.
+		var hasBom = HasByteOrderMark(fileBytes, actualEncoding);
+		var encodingForWrite = EnsureBomBehavior(actualEncoding, hasBom);
+
+		return (content, encodingForWrite);
 	}
 
 	/// <summary>
@@ -165,16 +175,54 @@ internal static class FileHelper
 			return new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
 		var detectedEncoding = detectionResult.Detected.Encoding;
-		var hasBom = detectionResult.Detected.HasBOM;
 
 		// ASCII is a subset of UTF-8, treat as UTF-8 without BOM
 		if (detectedEncoding.WebName.Equals("us-ascii", StringComparison.OrdinalIgnoreCase))
 			return new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
-		// For UTF-8, preserve BOM status
-		if (detectedEncoding is UTF8Encoding || detectedEncoding.WebName.Equals("utf-8", StringComparison.OrdinalIgnoreCase))
+		return detectedEncoding;
+	}
+
+	/// <summary>
+	/// Checks whether the raw file bytes start with the BOM (preamble) of the given encoding.
+	/// </summary>
+	private static bool HasByteOrderMark(byte[] fileBytes, Encoding encoding)
+	{
+		var preamble = encoding.GetPreamble();
+
+		if (preamble.Length == 0 || fileBytes.Length < preamble.Length)
+			return false;
+
+		return fileBytes.AsSpan(0, preamble.Length).SequenceEqual(preamble);
+	}
+
+	/// <summary>
+	/// Returns an encoding instance whose BOM emission behavior matches the original file.
+	/// For UTF-8 and Unicode encodings, this ensures the BOM is preserved (or omitted) on write.
+	/// </summary>
+	private static Encoding EnsureBomBehavior(Encoding encoding, bool hasBom)
+	{
+		// UTF-8: control BOM emission explicitly
+		if (encoding is UTF8Encoding || encoding.WebName.Equals("utf-8", StringComparison.OrdinalIgnoreCase))
 			return new UTF8Encoding(encoderShouldEmitUTF8Identifier: hasBom);
 
-		return detectedEncoding;
+		// UTF-16 LE
+		if (encoding.CodePage == 1200)
+			return new UnicodeEncoding(bigEndian: false, byteOrderMark: hasBom);
+
+		// UTF-16 BE
+		if (encoding.CodePage == 1201)
+			return new UnicodeEncoding(bigEndian: true, byteOrderMark: hasBom);
+
+		// UTF-32 LE
+		if (encoding.CodePage == 12000)
+			return new UTF32Encoding(bigEndian: false, byteOrderMark: hasBom);
+
+		// UTF-32 BE
+		if (encoding.CodePage == 12001)
+			return new UTF32Encoding(bigEndian: true, byteOrderMark: hasBom);
+
+		// For single-byte encodings (Windows-1252, ISO-8859-1, etc.) BOM is not applicable
+		return encoding;
 	}
 }

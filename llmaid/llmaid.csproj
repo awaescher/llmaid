@@ -8,6 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Update="appsettings.VisualStudio.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
