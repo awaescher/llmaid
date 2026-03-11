@@ -353,6 +353,8 @@ internal static class Program
 		LogVerboseDetail($"Estimated context length: {estimatedContextLength} tokens");
 
 		var generatedCodeBuilder = new StringBuilder();
+		var reasoningContentBuilder = new StringBuilder();
+		var reasoningUpdatesCount = 0;
 
 		var streamingUpdates = new List<ChatResponseUpdate>();
 
@@ -366,7 +368,7 @@ internal static class Program
 				.StartAsync(async ctx =>
 				{
 					var sendTask = ctx.AddTask("[green]Sending[/]");
-					var waitTask = ctx.AddTask("[green]Waiting[/]");
+					var reasoningTask = ctx.AddTask("[green]Reasoning[/]");
 					var receiveTask = ctx.AddTask("[green]Receiving[/]");
 
 					while (!ctx.IsFinished)
@@ -383,15 +385,52 @@ internal static class Program
 						if (hasAssistantStarter)
 							messages.Add(new ChatMessage(ChatRole.Assistant, settings.AssistantStarter));
 
+						var receivedFirstOutputToken = false;
+
 						await foreach (var update in ChatClient.GetStreamingResponseAsync(messages, options, cancellationToken).ConfigureAwait(false))
 						{
-							if (waitTask.Value == 0)
-								waitTask.Increment(100);
-
 							streamingUpdates.Add(update);
-							generatedCodeBuilder.Append(update?.Text ?? "");
-							receiveTask.Value = CalculateProgress(generatedCodeBuilder.Length, estimatedResponseTokens);
+
+							// Check for reasoning content (TextReasoningContent) in the update
+							var hasReasoningContent = update?.Contents?.Any(c => c is TextReasoningContent) ?? false;
+							var hasTextContent = !string.IsNullOrEmpty(update?.Text);
+
+							if (hasReasoningContent)
+							{
+								// Model is reasoning - collect reasoning content from TextReasoningContent
+								foreach (var content in update!.Contents.OfType<TextReasoningContent>())
+									reasoningContentBuilder.Append(content.Text ?? "");
+
+								reasoningUpdatesCount++;
+								if (reasoningTask.Value == 0)
+									reasoningTask.Increment(50); // Show activity during reasoning
+							}
+							else if (!hasTextContent && !receivedFirstOutputToken)
+							{
+								// No TextReasoningContent and no text output yet - likely a reasoning update
+								// from an API that doesn't map reasoning_content to TextReasoningContent
+								// (e.g. LM Studio with DeepSeek/Qwen models)
+								reasoningUpdatesCount++;
+								if (reasoningTask.Value == 0)
+									reasoningTask.Increment(50); // Show activity during reasoning
+							}
+
+							if (hasTextContent)
+							{
+								// First output token received - complete reasoning phase
+								if (!receivedFirstOutputToken)
+								{
+									receivedFirstOutputToken = true;
+									reasoningTask.Value = 100;
+								}
+
+								generatedCodeBuilder.Append(update?.Text ?? "");
+								receiveTask.Value = CalculateProgress(generatedCodeBuilder.Length, estimatedResponseTokens);
+							}
 						}
+
+						// Ensure reasoning task is completed
+						reasoningTask.Value = 100;
 
 						if (hasAssistantStarter)
 							generatedCodeBuilder.Insert(0, settings.AssistantStarter);
@@ -412,10 +451,27 @@ internal static class Program
 			if (hasAssistantStarter)
 				messages.Add(new ChatMessage(ChatRole.Assistant, settings.AssistantStarter));
 
+			var receivedFirstOutputTokenNoProgress = false;
+
 			await foreach (var update in ChatClient.GetStreamingResponseAsync(messages, options, cancellationToken).ConfigureAwait(false))
 			{
 				streamingUpdates.Add(update);
-				generatedCodeBuilder.Append(update?.Text ?? "");
+
+				var hasReasoningContent = update?.Contents?.Any(c => c is TextReasoningContent) ?? false;
+				var hasTextContent = !string.IsNullOrEmpty(update?.Text);
+
+				// Collect reasoning content from TextReasoningContent
+				foreach (var content in update?.Contents?.OfType<TextReasoningContent>() ?? [])
+					reasoningContentBuilder.Append(content.Text ?? "");
+
+				if (hasReasoningContent || (!hasTextContent && !receivedFirstOutputTokenNoProgress))
+					reasoningUpdatesCount++;
+
+				if (hasTextContent)
+				{
+					receivedFirstOutputTokenNoProgress = true;
+					generatedCodeBuilder.Append(update?.Text ?? "");
+				}
 			}
 
 			if (hasAssistantStarter)
@@ -434,10 +490,30 @@ internal static class Program
 		var actualOutputTokens = (int)(apiUsage?.OutputTokenCount ?? CountTokens(responseText));
 		var actualTotalTokens = (int)(apiUsage?.TotalTokenCount ?? (actualInputTokens + actualOutputTokens));
 
-		// Check for reasoning tokens in AdditionalCounts
-		var reasoningTokens = 0L;
-		if (apiUsage?.AdditionalCounts?.TryGetValue("reasoning_tokens", out reasoningTokens) != true)
-			apiUsage?.AdditionalCounts?.TryGetValue("ReasoningTokens", out reasoningTokens);
+		// Determine reasoning tokens using multiple fallback strategies:
+		// 1. Direct ReasoningTokenCount property (preferred, supported by OpenAI and compatible APIs)
+		// 2. AdditionalCounts dictionary entries (legacy/alternative key names)
+		// 3. Count tokens from streamed TextReasoningContent (when API streams reasoning as typed content)
+		// 4. Use streaming update count as estimate (when API sends reasoning_content that the SDK doesn't parse,
+		//    e.g. LM Studio with DeepSeek/Qwen models - each streaming event roughly equals one token)
+		var reasoningTokens = apiUsage?.ReasoningTokenCount ?? 0L;
+
+		if (reasoningTokens == 0)
+		{
+			if (apiUsage?.AdditionalCounts?.TryGetValue("reasoning_tokens", out var additionalReasoningTokens) == true)
+				reasoningTokens = additionalReasoningTokens;
+			else if (apiUsage?.AdditionalCounts?.TryGetValue("ReasoningTokens", out additionalReasoningTokens) == true)
+				reasoningTokens = additionalReasoningTokens;
+		}
+
+		// Fall back to counting reasoning tokens from streamed TextReasoningContent if API didn't report them
+		if (reasoningTokens == 0 && reasoningContentBuilder.Length > 0)
+			reasoningTokens = CountTokens(reasoningContentBuilder.ToString());
+
+		// Final fallback: use the count of reasoning streaming updates as an estimate
+		// Each streaming event during reasoning roughly corresponds to one token
+		if (reasoningTokens == 0 && reasoningUpdatesCount > 0)
+			reasoningTokens = reasoningUpdatesCount;
 
 		// Update cumulative counters
 		_cumulativeInputTokens += actualInputTokens;
