@@ -100,9 +100,21 @@ jobs:
       env:
         COMMITTER_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
 
-    - name: Update WinGet
-      if: github.event_name != 'pull_request'
-      uses: vedantmgoyal9/winget-releaser@v2
-      with:
-        identifier: awaescher.llmaid
-        token: ${{ secrets.WINGET_TOKEN }}
+    # - name: Update WinGet
+    #   # NOTE FOR FUTURE ME:
+    #   # This step requires "awaescher.llmaid" to already exist in the winget-pkgs repository.
+    #   # The very first version must be submitted manually before this automation can take over.
+    #   #
+    #   # HOW TO SUBMIT THE FIRST VERSION (run on Windows):
+    #   #   1. Install wingetcreate:
+    #   #        winget install Microsoft.WingetCreate
+    #   #   2. Create the manifest and open a PR to microsoft/winget-pkgs:
+    #   #        wingetcreate new https://github.com/awaescher/llmaid/releases/download/<version>/llmaid-windows-x64.zip
+    #   #   3. Wait for the PR to be reviewed and merged by the WinGet team.
+    #   #   4. Once accepted, uncomment this step and remove this comment block.
+    #   #      Make sure the WINGET_TOKEN secret is set (GitHub PAT with repo + workflow scopes).
+    #   if: github.event_name != 'pull_request'
+    #   uses: vedantmgoyal9/winget-releaser@v2
+    #   with:
+    #     identifier: awaescher.llmaid
+    #     token: ${{ secrets.WINGET_TOKEN }}
