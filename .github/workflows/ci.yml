@@ -1,0 +1,96 @@
+name: .NET Build, Test, and Release
+
+on:
+  push:
+    branches: [ "main", "master" ]
+    paths: [ 'llmaid/**' ]
+  pull_request:
+    branches: [ "main", "master" ]
+    paths: [ 'llmaid/**' ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Fetch all history for all tags and branches
+      run: |
+        git config remote.origin.url https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+        git fetch --prune --unshallow
+
+    - name: Install GitVersion
+      uses: gittools/actions/gitversion/setup@v3
+      with:
+        versionSpec: '6.x'
+
+    - name: Use GitVersion
+      id: gitversion
+      uses: gittools/actions/gitversion/execute@v3
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Restore dependencies
+      run: dotnet restore llmaid.slnx
+
+    - name: Build
+      run: dotnet build --no-restore --configuration=Release /p:Version=${{steps.gitversion.outputs.semVer}}
+
+    - name: Test
+      run: dotnet test --no-build --configuration=Release --verbosity normal
+
+    - name: Publish win-x64
+      if: github.event_name != 'pull_request'
+      run: dotnet publish llmaid/llmaid.csproj -r win-x64 --self-contained -c Release -o publish/win-x64 /p:Version=${{steps.gitversion.outputs.semVer}}
+
+    - name: Publish osx-arm64
+      if: github.event_name != 'pull_request'
+      run: dotnet publish llmaid/llmaid.csproj -r osx-arm64 --self-contained -c Release -o publish/osx-arm64 /p:Version=${{steps.gitversion.outputs.semVer}}
+
+    - name: Publish osx-x64
+      if: github.event_name != 'pull_request'
+      run: dotnet publish llmaid/llmaid.csproj -r osx-x64 --self-contained -c Release -o publish/osx-x64 /p:Version=${{steps.gitversion.outputs.semVer}}
+
+    - name: Publish linux-x64
+      if: github.event_name != 'pull_request'
+      run: dotnet publish llmaid/llmaid.csproj -r linux-x64 --self-contained -c Release -o publish/linux-x64 /p:Version=${{steps.gitversion.outputs.semVer}}
+
+    - name: Pack artifacts
+      if: github.event_name != 'pull_request'
+      run: |
+        mkdir -p artifacts
+        cd publish/win-x64   && zip -r ../../artifacts/llmaid-windows-x64.zip llmaid.exe appsettings.json
+        cd publish/osx-arm64 && tar czf ../../artifacts/llmaid-macos-arm64.tar.gz llmaid appsettings.json
+        cd publish/osx-x64   && tar czf ../../artifacts/llmaid-macos-x64.tar.gz llmaid appsettings.json
+        cd publish/linux-x64  && tar czf ../../artifacts/llmaid-linux-x64.tar.gz llmaid appsettings.json
+
+    - name: Create a GitHub release
+      if: github.event_name != 'pull_request'
+      uses: ncipollo/release-action@v1
+      with:
+        tag: ${{steps.gitversion.outputs.semVer}}
+        name: Release ${{steps.gitversion.outputs.semVer}}
+        generateReleaseNotes: true
+        artifacts: "artifacts/*"
+
+    - name: Update Homebrew Tap
+      if: github.event_name != 'pull_request'
+      uses: mislav/bump-homebrew-formula-action@v3
+      with:
+        formula-name: llmaid
+        homebrew-tap: awaescher/homebrew-tap
+        download-url: https://github.com/awaescher/llmaid/releases/download/${{steps.gitversion.outputs.semVer}}/llmaid-macos-arm64.tar.gz
+      env:
+        COMMITTER_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+
+    - name: Update WinGet
+      if: github.event_name != 'pull_request'
+      uses: vedantmgoyal9/winget-releaser@v2
+      with:
+        identifier: awaescher.llmaid
+        token: ${{ secrets.WINGET_TOKEN }}

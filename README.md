@@ -82,6 +82,31 @@ dotnet run --project llmaid -- --profile ./profiles/image-alt-text-generator.yam
 
 ## Installation
 
+### Homebrew (macOS / Linux)
+
+```bash
+brew install awaescher/tap/llmaid
+```
+
+### WinGet (Windows)
+
+```powershell
+winget install awaescher.llmaid
+```
+
+### Manual Download
+
+Download the latest binary for your platform from [GitHub Releases](https://github.com/awaescher/llmaid/releases/latest).
+
+| Platform | File |
+|----------|------|
+| Windows x64 | `llmaid-windows-x64.zip` |
+| macOS ARM64 | `llmaid-macos-arm64.tar.gz` |
+| macOS x64 | `llmaid-macos-x64.tar.gz` |
+| Linux x64 | `llmaid-linux-x64.tar.gz` |
+
+### From Source
+
 ```bash
 git clone https://github.com/awaescher/llmaid
 cd llmaid
