@@ -93,6 +93,7 @@ jobs:
         formula-name: llmaid
         homebrew-tap: awaescher/homebrew-tap
         download-url: https://github.com/awaescher/llmaid/releases/download/${{steps.gitversion.outputs.semVer}}/llmaid-macos-arm64.tar.gz
+        base-branch: main
       env:
         COMMITTER_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
 
