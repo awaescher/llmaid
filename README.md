@@ -6,19 +6,23 @@ llmaid is a command-line tool designed to automate the process of AI supported f
 
 ---
 
-### 💬 But there is GitHub Copilot, Cursor, Claude Code, OpenCode and so many more. Isn't llmaid outdated?
-
-Yes, very. But it serves a slightly different use-case.
-
-These partly autonomous agents are amazing but they cannot be used to fix typos or add documentation in every single code file of a repository. These tools work in a different way and need to minimize their context while navigating through your codebase.
-
-llmaid is different: Every file is a new conversation. While there is no autonomous intelligence, it can review or edit every file in total based on your instructions. This is handy to find things in your codebase you could not search with RegEx, for example. The feature of writing the LLM response back also enables batch-processing of every single file in the codebase, like "fix all typos".
-
----
-
 > [!NOTE]
 > 1. Paid services such as ChatGPT can cause high API costs if they are used with many files. Double check your config.
 > 2. You may get lower quality when using local models with [Ollama](https://ollama.com) or [LM Studio](https://lmstudio.ai), but it's completely free and your files will never leave your computer.
+
+---
+
+### 💬 Is this thing competing with GitHub Copilot, Cursor, Claude Code, OpenCode and so many more?
+
+No. It serves a slightly different use-case.
+
+These partly autonomous agents are amazing and way more sophisticated. But they cannot be used to fix typos or add documentation in every single code file of a repository. These tools work in a different way and need to minimize their context while navigating through your file structure. They need something to find and work on - they can't possibly change _everything_.
+
+llmaid is different: Every file is a new conversation. While there is no autonomous intelligence, it can review or edit every single file based on your instructions. This is handy to find or edit things in your files you could not search for. The feature of writing the LLM response back also enables batch-processing of every single file in the codebase, like "fix all typos".
+
+#### **tl;dr**
+If you ask Claude Code to fix every typo in your code base, it will try to find the most common typos with RegEx. But that won't help you. llmaid will send every single file you want with a prompt to an LLM and output the answer or even rewrite these files with the LLM response - and with that eliminate every typo in a text file.
+
 
 ![image](https://github.com/user-attachments/assets/015ba09b-4ce5-439f-a6af-4e20da6e511e)
 
