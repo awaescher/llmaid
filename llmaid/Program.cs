@@ -14,6 +14,7 @@ internal static class Program
 		// Show help when no arguments are provided at all
 		if (args.Length == 0)
 			args = ["--help"];
+
 		// Let --help and --version be handled by System.CommandLine without further processing
 		if (args.Any(a => a is "-?" or "-h" or "--help" or "--version"))
 		{
