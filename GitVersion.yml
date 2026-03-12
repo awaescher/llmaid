@@ -1,19 +1,7 @@
-assembly-versioning-scheme: MajorMinorPatch
-assembly-file-versioning-scheme: MajorMinorPatch
-mode: ContinuousDelivery
+workflow: GitHubFlow/v1
 branches:
   main:
+    label: ''
     regex: ^master$|^main$
     increment: Patch
-    prevent-increment-of-merged-branch-version: true
-    track-merge-target: false
-    is-release-branch: true
-    pre-release-weight: 0
-  pull-request:
-    regex: ^(pull|pull\-requests|pr)[/-]
-    increment: Inherit
-    tag: PullRequest
-    tag-number-pattern: '[/-](?<number>\d+)'
-    pre-release-weight: 30000
-ignore:
-  sha: []
+    is-main-branch: true
