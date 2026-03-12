@@ -54,19 +54,19 @@ jobs:
 
     - name: Publish win-x64
       if: github.event_name != 'pull_request'
-      run: dotnet publish llmaid/llmaid.csproj -r win-x64 --self-contained -c Release -o publish/win-x64 /p:Version=${{steps.gitversion.outputs.semVer}}
+      run: dotnet publish llmaid/llmaid.csproj -r win-x64 --self-contained -c Release -o publish/win-x64 /p:Version=${{steps.gitversion.outputs.semVer}} /p:PublishSingleFile=true
 
     - name: Publish osx-arm64
       if: github.event_name != 'pull_request'
-      run: dotnet publish llmaid/llmaid.csproj -r osx-arm64 --self-contained -c Release -o publish/osx-arm64 /p:Version=${{steps.gitversion.outputs.semVer}}
+      run: dotnet publish llmaid/llmaid.csproj -r osx-arm64 --self-contained -c Release -o publish/osx-arm64 /p:Version=${{steps.gitversion.outputs.semVer}} /p:PublishSingleFile=true
 
     - name: Publish osx-x64
       if: github.event_name != 'pull_request'
-      run: dotnet publish llmaid/llmaid.csproj -r osx-x64 --self-contained -c Release -o publish/osx-x64 /p:Version=${{steps.gitversion.outputs.semVer}}
+      run: dotnet publish llmaid/llmaid.csproj -r osx-x64 --self-contained -c Release -o publish/osx-x64 /p:Version=${{steps.gitversion.outputs.semVer}} /p:PublishSingleFile=true
 
     - name: Publish linux-x64
       if: github.event_name != 'pull_request'
-      run: dotnet publish llmaid/llmaid.csproj -r linux-x64 --self-contained -c Release -o publish/linux-x64 /p:Version=${{steps.gitversion.outputs.semVer}}
+      run: dotnet publish llmaid/llmaid.csproj -r linux-x64 --self-contained -c Release -o publish/linux-x64 /p:Version=${{steps.gitversion.outputs.semVer}} /p:PublishSingleFile=true
 
     - name: Pack artifacts
       if: github.event_name != 'pull_request'
