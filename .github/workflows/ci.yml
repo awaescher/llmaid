@@ -88,7 +88,7 @@ jobs:
 
     - name: Update Homebrew Tap
       if: github.event_name != 'pull_request'
-      uses: mislav/bump-homebrew-formula-action@v3
+      uses: mislav/bump-homebrew-formula-action@v3.1
       with:
         formula-name: llmaid
         homebrew-tap: awaescher/homebrew-tap
