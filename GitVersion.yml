@@ -1,7 +1,0 @@
-workflow: GitHubFlow/v1
-branches:
-  main:
-    label: ''
-    regex: ^master$|^main$
-    increment: Patch
-    is-main-branch: true
