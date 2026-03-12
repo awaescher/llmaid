@@ -9,11 +9,13 @@ on:
     paths:
       - 'llmaid/**'
       - '.github/workflows/**'
+      - 'GitVersion.yml'
   pull_request:
     branches: [ "main", "master" ]
     paths:
       - 'llmaid/**'
       - '.github/workflows/**'
+      - 'GitVersion.yml'
 
 jobs:
   build:
