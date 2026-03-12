@@ -136,10 +136,10 @@ internal class FileProcessor
 	{
 		var codeLanguage = isImage ? "" : FileHelper.GetCodeLanguageByFileExtension(Path.GetExtension(file));
 
-		return (_settings.SystemPrompt ?? string.Empty)
-			.Replace("%CODE%", originalCode ?? "")
-			.Replace("%CODELANGUAGE%", codeLanguage)
-			.Replace("%FILENAME%", Path.GetFileName(file));
+		return PromptPlaceholders.Replace(_settings.SystemPrompt ?? string.Empty)
+			.Replace("{{CODE}}", originalCode ?? "")
+			.Replace("{{CODELANGUAGE}}", codeLanguage)
+			.Replace("{{FILENAME}}", Path.GetFileName(file));
 	}
 
 	private async Task<IList<AIContent>> BuildUserContentAsync(string file, string? textContent, CancellationToken cancellationToken)

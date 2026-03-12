@@ -37,6 +37,44 @@ With this prompt, llmaid will scan and rewrite each code file and generate missi
 This prompt will output one json code block for each file. There it lists findings such as insults, cringe comments, and much more including a severity rating and a description what it thinks about the things it found:
 ![Review files](./docs/review%20files.png)
 
+## Profiles & Examples
+
+Each profile has demo files in `./testfiles/` you can run right away. Replace `MODEL-HERE` with a model available on your LLM provider.
+
+### Code profiles
+
+**Document public members in source code** — rewrites files with XML/JSDoc/docstring comments:
+```bash
+dotnet run --project llmaid -- --profile ./profiles/code-documenter.yaml --targetPath ./testfiles/code
+```
+
+**Find unprofessional language in code** — outputs a JSON report of findings per file:
+```bash
+dotnet run --project llmaid -- --profile ./profiles/unprofessional-content-finder.yaml --targetPath ./testfiles/code
+```
+
+**Fix unprofessional language in code** — rewrites files with neutralized comments:
+```bash
+dotnet run --project llmaid -- --profile ./profiles/unprofessional-content-fixer.yaml --targetPath ./testfiles/code
+```
+
+### Image profiles
+
+**Rate content by age classification** — outputs YAML with FSK/USK/PEGI/ESRB ratings for text and images:
+```bash
+dotnet run --project llmaid -- --profile ./profiles/age-rater.yaml --targetPath ./testfiles/age-rater
+```
+
+**Detect brand logos in images** — outputs YAML listing all visible brands with confidence and location:
+```bash
+dotnet run --project llmaid -- --profile ./profiles/brand-detector.yaml --targetPath ./testfiles/brand-detector
+```
+
+**Generate alt text for images** — outputs YAML with three detail levels (short ≤125 chars, medium, long):
+```bash
+dotnet run --project llmaid -- --profile ./profiles/image-alt-text-generator.yaml --targetPath ./testfiles/alt-text-generator
+```
+
 ## Prerequisites
 
 - [.NET 10.0 SDK](https://dotnet.microsoft.com/download)
@@ -164,6 +202,65 @@ Available arguments:
 | `lmstudio` | `http://localhost:1234/v1` | No (use empty string or any placeholder) |
 | `openai` | `https://api.openai.com/v1` | Yes |
 | `openai-compatible` | Your server's URL | Depends on server |
+
+
+### System Prompt Placeholders
+
+llmaid automatically replaces `{{PLACEHOLDER}}` tokens in the `systemPrompt` with live system values before sending the prompt to the model. This lets you write date-aware, locale-aware, or environment-aware prompts without hardcoding anything.
+
+> [!NOTE]
+> Placeholders are only replaced inside the `systemPrompt`. They are never applied to file contents or any other settings.
+
+#### File (per-file, resolved for each processed file)
+
+| Placeholder | Description |
+|-------------|-------------|
+| `{{CODE}}` | Full content of the current file being processed |
+| `{{CODELANGUAGE}}` | Programming language derived from the file extension (e.g. `csharp`, `javascript`) |
+| `{{FILENAME}}` | Name of the current file without its directory path |
+
+#### Date & Time
+
+| Placeholder | Example value | Description |
+|-------------|---------------|-------------|
+| `{{TODAY}}` | `2026-03-12` | Current date in ISO 8601 format |
+| `{{NOW}}` | `2026-03-12T15:44:58` | Current date and time in ISO 8601 format |
+| `{{YEAR}}` | `2026` | Current four-digit year |
+| `{{MONTH}}` | `03` | Current month (01–12) |
+| `{{WEEKDAY}}` | `Thursday` | Current day of the week (English) |
+
+#### System & Environment
+
+| Placeholder | Example value | Description |
+|-------------|---------------|-------------|
+| `{{USERNAME}}` | `awaescher` | OS login name of the current user |
+| `{{MACHINENAME}}` | `my-macbook` | Network hostname of the machine |
+| `{{TIMEZONE}}` | `Europe/Berlin` | IANA time zone of the local system |
+| `{{NEWLINE}}` | _(platform newline)_ | Platform-specific line break (`\n` or `\r\n`) |
+
+#### Locale & Formatting
+
+| Placeholder | Example value (`de-DE`) | Example value (`en-US`) | Description |
+|-------------|-------------------------|-------------------------|-------------|
+| `{{CULTURE}}` | `de-DE` | `en-US` | BCP 47 locale tag of the current UI culture |
+| `{{DATEFORMAT}}` | `dd.MM.yyyy` | `M/d/yyyy` | Short date pattern of the current culture |
+| `{{TIMEFORMAT}}` | `HH:mm:ss` | `h:mm:ss tt` | Long time pattern of the current culture |
+| `{{DATESEPARATOR}}` | `.` | `/` | Date separator character |
+| `{{TIMESEPARATOR}}` | `:` | `:` | Time separator character |
+| `{{DECIMALSEPARATOR}}` | `,` | `.` | Decimal separator character |
+| `{{GROUPSEPARATOR}}` | `.` | `,` | Thousands group separator character |
+| `{{CURRENCYSYMBOL}}` | `€` | `$` | Currency symbol |
+
+#### Example usage
+
+```yaml
+systemPrompt: |
+  Today is {{TODAY}} ({{WEEKDAY}}). The user's locale is {{CULTURE}}.
+  Numbers use '{{DECIMALSEPARATOR}}' as decimal separator and '{{CURRENCYSYMBOL}}' as currency.
+  Dates are formatted as {{DATEFORMAT}}.
+  
+  Analyze the provided invoice and check all calculations.
+```
 
 ## FAQ
 

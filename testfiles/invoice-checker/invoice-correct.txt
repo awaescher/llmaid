@@ -1,0 +1,41 @@
+RECHNUNG
+
+Müller & Söhne GmbH                          Rechnungsnummer: RE-2026-00847
+Industriestraße 42                            Rechnungsdatum:  05.03.2026
+70565 Stuttgart                               Lieferdatum:     03.03.2026
+USt-IdNr.: DE123456789
+
+An:
+TechVision AG
+Herrn Thomas Weber
+Königstraße 28
+70173 Stuttgart
+
+──────────────────────────────────────────────────────────────────────────
+
+Pos.  Beschreibung                          Menge    Einzelpreis     Gesamt
+──────────────────────────────────────────────────────────────────────────
+  1   Bürostuhl "ErgoLine Pro"                  5     349,00 EUR   1.745,00 EUR
+  2   Schreibtisch höhenverstellbar             5     599,00 EUR   2.995,00 EUR
+  3   Monitorarm dual                           5      89,00 EUR     445,00 EUR
+  4   Lieferung & Montage (pauschal)            1     250,00 EUR     250,00 EUR
+──────────────────────────────────────────────────────────────────────────
+
+                                          Nettobetrag:             5.435,00 EUR
+                                          USt. 19%:                1.032,65 EUR
+                                          ═══════════════════════════════════════
+                                          Gesamtbetrag:            6.467,65 EUR
+
+Zahlungsbedingungen: Zahlbar innerhalb von 30 Tagen ab Rechnungsdatum ohne Abzug.
+Bei Zahlung innerhalb von 10 Tagen gewähren wir 2% Skonto.
+
+Bankverbindung:
+Müller & Söhne GmbH
+IBAN: DE89 3704 0044 0532 0130 00
+BIC:  COBADEFFXXX
+Commerzbank Stuttgart
+
+Vielen Dank für Ihren Auftrag!
+
+Geschäftsführer: Hans Müller, Peter Söhne
+Handelsregister: Amtsgericht Stuttgart, HRB 12345

@@ -1,0 +1,28 @@
+Invoice
+
+CloudServe
+support@cloudserve.io
+
+To: Max Mustermann
+
+Invoice No: 789
+Date: March 2026
+
+─────────────────────────────────────────────
+
+  1x  Enterprise Hosting Plan (annual)       2.400,00 EUR
+  3x  Additional Storage 500GB                 450,00 EUR
+  1x  SSL Certificate Wildcard                 149,00 EUR
+  1x  Priority Support                         600,00 EUR
+      Setup fee                                  0,00 EUR
+
+─────────────────────────────────────────────
+
+  Subtotal:      3.599,00 EUR
+  VAT (19%):       684,00 EUR
+  ─────────────────────────────
+  Total:         4.283,00 EUR
+
+Please transfer within a reasonable timeframe.
+
+Thank you for your business!
