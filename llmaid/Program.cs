@@ -9,6 +9,12 @@ internal static class Program
 {
 	static async Task Main(string[] args)
 	{
+		args ??= [];
+
+		// Show help when no arguments are provided at all
+		if (args.Length == 0)
+			args = ["--help"];
+
 		// Let --help and --version be handled by System.CommandLine without further processing
 		if (args.Any(a => a is "-?" or "-h" or "--help" or "--version"))
 		{
