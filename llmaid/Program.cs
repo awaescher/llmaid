@@ -59,7 +59,7 @@ internal static class Program
 	private static void InitializeLogging()
 	{
 		Log.Logger = new LoggerConfiguration()
-			.WriteTo.File($"./logs/{DateTime.Now:yyyy-MM-dd-hh-mm-ss}.log")
+			.WriteTo.File($"./logs/{DateTime.Now:yyyy-MM-dd-HH-mm-ss}.log")
 			.MinimumLevel.Verbose()
 			.CreateLogger();
 	}

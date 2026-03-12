@@ -31,6 +31,4 @@ public static partial class CodeBlockExtractor
 	{
 		return MarkdownCodeBlockMatchPattern().Matches(text).FirstOrDefault(m => m.Groups.Count > 1)?.Groups[1]?.Value.Trim() ?? string.Empty;
 	}
-
-
 }

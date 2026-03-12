@@ -33,6 +33,7 @@ internal static class CommandLineParser
 		var resumeAtOption = new Option<string>(MakeArgument(nameof(Settings.ResumeAt)), "Resume processing from a specific file (skips all files until a filename containing this pattern is found)");
 		var ollamaMinNumCtxOption = new Option<int?>(MakeArgument(nameof(Settings.OllamaMinNumCtx)), "Minimum context length for Ollama provider to prevent unnecessary model reloads (default: 20480)");
 		var reasoningTimeoutOption = new Option<int?>(MakeArgument(nameof(Settings.ReasoningTimeoutSeconds)), "Maximum seconds a model may spend reasoning before the request is cancelled (default: 600, 0 = disabled)");
+		var maxImageDimensionOption = new Option<int?>(MakeArgument(nameof(Settings.MaxImageDimension)), "Maximum image dimension (width or height) in pixels, images are resized to fit (default: 2048)");
 
 		// Toggle flags: can be specified without a value (defaults to true when present)
 		var applyCodeblockOption = new Option<bool?>(MakeArgument(nameof(Settings.ApplyCodeblock)), "Extract codeblock from response and overwrite file (false = output to console)");
@@ -71,7 +72,8 @@ internal static class CommandLineParser
 			ollamaMinNumCtxOption,
 			preserveWhitespaceOption,
 			showProgressOption,
-			reasoningTimeoutOption
+			reasoningTimeoutOption,
+			maxImageDimensionOption
 		};
 
 		// --- Bind parsed values to settings ---
@@ -95,6 +97,7 @@ internal static class CommandLineParser
 			settings.ResumeAt = context.ParseResult.GetValueForOption(resumeAtOption);
 			settings.OllamaMinNumCtx = context.ParseResult.GetValueForOption(ollamaMinNumCtxOption) ?? settings.OllamaMinNumCtx;
 			settings.ReasoningTimeoutSeconds = context.ParseResult.GetValueForOption(reasoningTimeoutOption) ?? settings.ReasoningTimeoutSeconds;
+			settings.MaxImageDimension = context.ParseResult.GetValueForOption(maxImageDimensionOption) ?? settings.MaxImageDimension;
 
 			// Toggle flags: when specified without value, they default to true
 			if (context.ParseResult.FindResultFor(applyCodeblockOption) is not null)

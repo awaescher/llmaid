@@ -142,13 +142,19 @@ Available arguments:
 - `--applyCodeblock` – `true` extracts codeblock and overwrites file, `false` outputs response to console
 - `--temperature` – Model temperature (0-2)
 - `--systemPrompt` – System prompt text
+- `--assistantStarter` – String to start the assistant's message (can guide model output format)
 - `--dryRun` – Simulate without changes
 - `--maxRetries` – Retry count on failures
 - `--verbose` – Show detailed output (tokens, timing, settings)
+- `--writeResponseToConsole` – Whether to write the model's response to the console (default: true)
 - `--cooldownSeconds` – Cooldown time after processing each file to prevent overheating (default: 0)
 - `--maxFileTokens` – Maximum tokens a file may contain before it is skipped (default: 102400)
 - `--resumeAt` – Resume processing from a specific file (skips all files until a filename containing this pattern is found)
+- `--ollamaMinNumCtx` – Minimum context length for Ollama provider to prevent unnecessary model reloads (default: 20480)
 - `--preserveWhitespace` – Preserve original leading and trailing whitespace when writing files to avoid diff noise (default: false)
+- `--showProgress` – Show progress indicator during file processing (default: true)
+- `--reasoningTimeoutSeconds` – Maximum seconds a model may spend reasoning before the request is cancelled (default: 600, 0 = disabled)
+- `--maxImageDimension` – Maximum image dimension in pixels, images are resized to fit while preserving aspect ratio (default: 2048)
 
 ### Supported Providers
 
