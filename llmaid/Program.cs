@@ -14,11 +14,17 @@ internal static class Program
 		// Show help when no arguments are provided at all
 		if (args.Length == 0)
 			args = ["--help"];
-
 		// Let --help and --version be handled by System.CommandLine without further processing
 		if (args.Any(a => a is "-?" or "-h" or "--help" or "--version"))
 		{
 			CommandLineParser.Parse(args);
+			Console.WriteLine();
+			Console.WriteLine("  More information and usage examples:");
+			Console.WriteLine("    https://github.com/awaescher/llmaid");
+			Console.WriteLine();
+			Console.WriteLine("  Profile examples:");
+			Console.WriteLine("    https://github.com/awaescher/llmaid/tree/master/profiles");
+			Console.WriteLine();
 			return;
 		}
 
