@@ -35,13 +35,17 @@ internal static class Program
 	/// </summary>
 	private static async Task<Settings> LoadSettings(string[] args)
 	{
+		// For single-file deployments (e.g. Homebrew), AppContext.BaseDirectory points to a temp extraction
+		// directory, not the binary location. Environment.ProcessPath gives the actual executable path.
+		var executableDir = Path.GetDirectoryName(Environment.ProcessPath) ?? AppContext.BaseDirectory;
 		var config = new ConfigurationBuilder()
-			.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-			.AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production"}.json", optional: true)
-			.AddJsonFile($"appsettings.{(Debugger.IsAttached ? "VisualStudio" : "Production")}.json", optional: true)
+			.SetBasePath(executableDir)
+			.AddJsonFile(Path.Combine(executableDir, "appsettings.json"), optional: true, reloadOnChange: false)
+			.AddJsonFile(Path.Combine(executableDir, $"appsettings.{Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production"}.json"), optional: true, reloadOnChange: false)
+			.AddJsonFile(Path.Combine(executableDir, $"appsettings.{(Debugger.IsAttached ? "VisualStudio" : "Production")}.json"), optional: true, reloadOnChange: false)
 			.Build();
 
-		var settings = config.Get<Settings>() ?? throw new ArgumentException("Settings could not be parsed.");
+		var settings = config.Get<Settings>() ?? Settings.Empty;
 
 		var cliSettings = CommandLineParser.Parse(args);
 		var profilePath = cliSettings.Profile ?? settings.Profile;
