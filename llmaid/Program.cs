@@ -5,7 +5,7 @@ using Serilog;
 
 namespace llmaid;
 
-internal static class Program
+internal static class Program /* Test */
 {
 	static async Task Main(string[] args)
 	{
