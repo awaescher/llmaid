@@ -177,4 +177,190 @@ public class FileHelperEncodingTests
 			rereadEncoding.GetPreamble().Length.ShouldBe(detectedEncoding.GetPreamble().Length, "BOM behavior should be consistent");
 		}
 	}
+
+	public class DetectLineEndingMethod : FileHelperEncodingTests
+	{
+		[Test]
+		public void Detects_Crlf()
+		{
+			FileHelper.DetectLineEnding("line1\r\nline2\r\nline3").ShouldBe("\r\n");
+		}
+
+		[Test]
+		public void Detects_Lf()
+		{
+			FileHelper.DetectLineEnding("line1\nline2\nline3").ShouldBe("\n");
+		}
+
+		[Test]
+		public void Detects_Cr()
+		{
+			FileHelper.DetectLineEnding("line1\rline2\rline3").ShouldBe("\r");
+		}
+
+		[Test]
+		public void Returns_Lf_For_No_Line_Endings()
+		{
+			FileHelper.DetectLineEnding("single line").ShouldBe("\n");
+		}
+
+		[Test]
+		public void Returns_Lf_For_Empty_String()
+		{
+			FileHelper.DetectLineEnding("").ShouldBe("\n");
+		}
+
+		[Test]
+		public void Returns_Lf_For_Only_Whitespace()
+		{
+			FileHelper.DetectLineEnding("   \t  ").ShouldBe("\n");
+		}
+
+		[Test]
+		public void Detects_Dominant_Style_Crlf_Over_Lf()
+		{
+			// 2x CRLF, 1x LF → CRLF wins
+			FileHelper.DetectLineEnding("line1\r\nline2\r\nline3\nline4").ShouldBe("\r\n");
+		}
+
+		[Test]
+		public void Detects_Dominant_Style_Lf_Over_Crlf()
+		{
+			// 1x CRLF, 2x LF → LF wins
+			FileHelper.DetectLineEnding("line1\r\nline2\nline3\nline4").ShouldBe("\n");
+		}
+
+		[Test]
+		public void Crlf_Cr_In_Single_Sequence_Counts_As_Crlf_Not_Cr()
+		{
+			// \r\n should be counted as one CRLF, the \r alone should NOT also be counted as CR
+			FileHelper.DetectLineEnding("line1\r\nline2").ShouldBe("\r\n");
+		}
+
+		[Test]
+		public void Detects_Single_Crlf()
+		{
+			FileHelper.DetectLineEnding("line1\r\nline2").ShouldBe("\r\n");
+		}
+
+		[Test]
+		public void Detects_Single_Lf()
+		{
+			FileHelper.DetectLineEnding("line1\nline2").ShouldBe("\n");
+		}
+
+		[Test]
+		public void Detects_Single_Cr()
+		{
+			FileHelper.DetectLineEnding("line1\rline2").ShouldBe("\r");
+		}
+
+		[Test]
+		public void Preserves_Non_Newline_Special_Characters()
+		{
+			// Tabs, form feeds, and other special chars must not interfere with detection
+			FileHelper.DetectLineEnding("col1\tcol2\tcol3\r\ncol4\tcol5\tcol6").ShouldBe("\r\n");
+		}
+	}
+
+	public class NormalizeLineEndingsMethod : FileHelperEncodingTests
+	{
+		[Test]
+		public void Converts_Lf_To_Crlf()
+		{
+			FileHelper.NormalizeLineEndings("line1\nline2\nline3", "\r\n").ShouldBe("line1\r\nline2\r\nline3");
+		}
+
+		[Test]
+		public void Converts_Crlf_To_Lf()
+		{
+			FileHelper.NormalizeLineEndings("line1\r\nline2\r\nline3", "\n").ShouldBe("line1\nline2\nline3");
+		}
+
+		[Test]
+		public void Converts_Cr_To_Lf()
+		{
+			FileHelper.NormalizeLineEndings("line1\rline2\rline3", "\n").ShouldBe("line1\nline2\nline3");
+		}
+
+		[Test]
+		public void Converts_Cr_To_Crlf()
+		{
+			FileHelper.NormalizeLineEndings("line1\rline2\rline3", "\r\n").ShouldBe("line1\r\nline2\r\nline3");
+		}
+
+		[Test]
+		public void Converts_Lf_To_Cr()
+		{
+			FileHelper.NormalizeLineEndings("line1\nline2\nline3", "\r").ShouldBe("line1\rline2\rline3");
+		}
+
+		[Test]
+		public void Converts_Crlf_To_Cr()
+		{
+			FileHelper.NormalizeLineEndings("line1\r\nline2\r\nline3", "\r").ShouldBe("line1\rline2\rline3");
+		}
+
+		[Test]
+		public void Preserves_Lf_When_Target_Is_Lf()
+		{
+			FileHelper.NormalizeLineEndings("line1\nline2\n", "\n").ShouldBe("line1\nline2\n");
+		}
+
+		[Test]
+		public void Preserves_Crlf_When_Target_Is_Crlf()
+		{
+			FileHelper.NormalizeLineEndings("line1\r\nline2\r\n", "\r\n").ShouldBe("line1\r\nline2\r\n");
+		}
+
+		[Test]
+		public void Handles_Mixed_Endings_To_Crlf()
+		{
+			FileHelper.NormalizeLineEndings("line1\r\nline2\nline3\rline4", "\r\n").ShouldBe("line1\r\nline2\r\nline3\r\nline4");
+		}
+
+		[Test]
+		public void Handles_Mixed_Endings_To_Lf()
+		{
+			FileHelper.NormalizeLineEndings("line1\r\nline2\nline3\rline4", "\n").ShouldBe("line1\nline2\nline3\nline4");
+		}
+
+		[Test]
+		public void Does_Not_Double_Crlf_On_Mixed_Input()
+		{
+			// A CRLF input normalized to CRLF must not produce \r\r\n
+			FileHelper.NormalizeLineEndings("line1\r\nline2", "\r\n").ShouldBe("line1\r\nline2");
+		}
+
+		[Test]
+		public void Preserves_Non_Newline_Special_Characters()
+		{
+			// Tabs, null bytes and other chars must pass through unchanged
+			FileHelper.NormalizeLineEndings("col1\tcol2\r\ncol3\tcol4", "\n").ShouldBe("col1\tcol2\ncol3\tcol4");
+		}
+
+		[Test]
+		public void Handles_Empty_String()
+		{
+			FileHelper.NormalizeLineEndings("", "\r\n").ShouldBe("");
+		}
+
+		[Test]
+		public void Handles_String_Without_Line_Endings()
+		{
+			FileHelper.NormalizeLineEndings("no newlines here", "\r\n").ShouldBe("no newlines here");
+		}
+
+		[Test]
+		public void Handles_Only_Newlines()
+		{
+			FileHelper.NormalizeLineEndings("\n\n\n", "\r\n").ShouldBe("\r\n\r\n\r\n");
+		}
+
+		[Test]
+		public void Trailing_Newline_Is_Preserved()
+		{
+			FileHelper.NormalizeLineEndings("line1\nline2\n", "\r\n").ShouldBe("line1\r\nline2\r\n");
+		}
+	}
 }

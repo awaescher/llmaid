@@ -225,4 +225,60 @@ internal static class FileHelper
 		// For single-byte encodings (Windows-1252, ISO-8859-1, etc.) BOM is not applicable
 		return encoding;
 	}
+
+	/// <summary>
+	/// Detects the dominant line ending style in a text string.
+	/// Returns "\r\n" for Windows, "\r" for old Mac, or "\n" for Unix (default).
+	/// </summary>
+	internal static string DetectLineEnding(string text)
+	{
+		var crlf = 0;
+		var lf = 0;
+		var cr = 0;
+
+		for (var i = 0; i < text.Length; i++)
+		{
+			if (text[i] == '\r')
+			{
+				if (i + 1 < text.Length && text[i + 1] == '\n')
+				{
+					crlf++;
+					i++; // skip the \n
+				}
+				else
+				{
+					cr++;
+				}
+			}
+			else if (text[i] == '\n')
+			{
+				lf++;
+			}
+		}
+
+		if (crlf == 0 && lf == 0 && cr == 0)
+			return "\n";
+
+		if (crlf >= lf && crlf >= cr)
+			return "\r\n";
+
+		if (cr > lf)
+			return "\r";
+
+		return "\n";
+	}
+
+	/// <summary>
+	/// Normalizes all line endings in a text string to the specified line ending.
+	/// </summary>
+	internal static string NormalizeLineEndings(string text, string lineEnding)
+	{
+		// First normalize everything to \n, then replace with the target
+		var normalized = text.Replace("\r\n", "\n").Replace("\r", "\n");
+
+		if (lineEnding == "\n")
+			return normalized;
+
+		return normalized.Replace("\n", lineEnding);
+	}
 }

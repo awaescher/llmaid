@@ -502,6 +502,12 @@ internal class FileProcessor
 		var finalCode = PreserveWhitespace(extractedCode, originalCode);
 		var encoding = originalEncoding ?? new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
+		if (originalCode != null)
+		{
+			var originalLineEnding = FileHelper.DetectLineEnding(originalCode);
+			finalCode = FileHelper.NormalizeLineEndings(finalCode, originalLineEnding);
+		}
+
 		await File.WriteAllTextAsync(file, finalCode, encoding, cancellationToken);
 
 		var writtenBytes = encoding.GetByteCount(finalCode) + encoding.GetPreamble().Length;
