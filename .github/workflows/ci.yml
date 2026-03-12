@@ -3,10 +3,14 @@ name: .NET Build, Test, and Release
 on:
   push:
     branches: [ "main", "master" ]
-    paths: [ 'llmaid/**' ]
+    paths:
+      - 'llmaid/**'
+      - '.github/workflows/**'
   pull_request:
     branches: [ "main", "master" ]
-    paths: [ 'llmaid/**' ]
+    paths:
+      - 'llmaid/**'
+      - '.github/workflows/**'
 
 jobs:
   build:
@@ -20,6 +24,7 @@ jobs:
       run: |
         git config remote.origin.url https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
         git fetch --prune --unshallow
+        git fetch --tags
 
     - name: Install GitVersion
       uses: gittools/actions/gitversion/setup@v3
@@ -64,10 +69,10 @@ jobs:
       if: github.event_name != 'pull_request'
       run: |
         mkdir -p artifacts
-        cd publish/win-x64   && zip -r ../../artifacts/llmaid-windows-x64.zip llmaid.exe appsettings.json
-        cd publish/osx-arm64 && tar czf ../../artifacts/llmaid-macos-arm64.tar.gz llmaid appsettings.json
-        cd publish/osx-x64   && tar czf ../../artifacts/llmaid-macos-x64.tar.gz llmaid appsettings.json
-        cd publish/linux-x64  && tar czf ../../artifacts/llmaid-linux-x64.tar.gz llmaid appsettings.json
+        cd publish/win-x64   && zip -r ../../artifacts/llmaid-windows-x64.zip llmaid.exe appsettings.json && cd ../..
+        cd publish/osx-arm64 && tar czf ../../artifacts/llmaid-macos-arm64.tar.gz llmaid appsettings.json && cd ../..
+        cd publish/osx-x64   && tar czf ../../artifacts/llmaid-macos-x64.tar.gz llmaid appsettings.json && cd ../..
+        cd publish/linux-x64  && tar czf ../../artifacts/llmaid-linux-x64.tar.gz llmaid appsettings.json && cd ../..
 
     - name: Create a GitHub release
       if: github.event_name != 'pull_request'
