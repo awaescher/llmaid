@@ -30,12 +30,6 @@ llmaid is different: Every file is a new conversation. While there is no autonom
 brew install awaescher/tap/llmaid
 ```
 
-### WinGet (Windows)
-
-```powershell
-winget install awaescher.llmaid
-```
-
 ### Manual Download
 
 Download the latest binary for your platform from [GitHub Releases](https://github.com/awaescher/llmaid/releases/latest).
