@@ -22,6 +22,32 @@ llmaid is different: Every file is a new conversation. While there is no autonom
 
 ![image](https://github.com/user-attachments/assets/015ba09b-4ce5-439f-a6af-4e20da6e511e)
 
+## Installation
+
+### Homebrew (macOS / Linux)
+
+```bash
+brew install awaescher/tap/llmaid
+```
+
+### WinGet (Windows)
+
+```powershell
+winget install awaescher.llmaid
+```
+
+### Manual Download
+
+Download the latest binary for your platform from [GitHub Releases](https://github.com/awaescher/llmaid/releases/latest).
+
+## Building from Source
+
+If you want to build llmaid yourself, you need the [.NET 10.0 SDK](https://dotnet.microsoft.com/download).
+
+```bash
+dotnet run --project llmaid -- --profile ./profiles/code-documenter.yaml --targetPath ./testfiles/code
+```
+
 ## What can it do?
 
 llmaid will run through every file in a path you specify and rewrite, analyse or summarize it. Pretty much everything you can come up with, as long as you can write a good system prompt.
@@ -45,76 +71,34 @@ Each profile has demo files in `./testfiles/` you can run right away. Replace `M
 
 **Document public members in source code** — rewrites files with XML/JSDoc/docstring comments:
 ```bash
-dotnet run --project llmaid -- --profile ./profiles/code-documenter.yaml --targetPath ./testfiles/code
+llmaid --profile ./profiles/code-documenter.yaml --targetPath ./testfiles/code
 ```
 
 **Find unprofessional language in code** — outputs a JSON report of findings per file:
 ```bash
-dotnet run --project llmaid -- --profile ./profiles/unprofessional-content-finder.yaml --targetPath ./testfiles/code
+llmaid --profile ./profiles/unprofessional-content-finder.yaml --targetPath ./testfiles/code
 ```
 
 **Fix unprofessional language in code** — rewrites files with neutralized comments:
 ```bash
-dotnet run --project llmaid -- --profile ./profiles/unprofessional-content-fixer.yaml --targetPath ./testfiles/code
+llmaid --profile ./profiles/unprofessional-content-fixer.yaml --targetPath ./testfiles/code
 ```
 
 ### Image profiles
 
 **Rate content by age classification** — outputs YAML with FSK/USK/PEGI/ESRB ratings for text and images:
 ```bash
-dotnet run --project llmaid -- --profile ./profiles/age-rater.yaml --targetPath ./testfiles/age-rater
+llmaid --profile ./profiles/age-rater.yaml --targetPath ./testfiles/age-rater
 ```
 
 **Detect brand logos in images** — outputs YAML listing all visible brands with confidence and location:
 ```bash
-dotnet run --project llmaid -- --profile ./profiles/brand-detector.yaml --targetPath ./testfiles/brand-detector
+llmaid --profile ./profiles/brand-detector.yaml --targetPath ./testfiles/brand-detector
 ```
 
 **Generate alt text for images** — outputs YAML with three detail levels (short ≤125 chars, medium, long):
 ```bash
-dotnet run --project llmaid -- --profile ./profiles/image-alt-text-generator.yaml --targetPath ./testfiles/alt-text-generator
-```
-
-## Prerequisites
-
-- [.NET 10.0 SDK](https://dotnet.microsoft.com/download)
-- An Ollama instance, LM Studio, or an OpenAI-compatible API including api key
-
-## Installation
-
-### Homebrew (macOS / Linux)
-
-```bash
-brew install awaescher/tap/llmaid
-```
-
-### WinGet (Windows)
-
-```powershell
-winget install awaescher.llmaid
-```
-
-### Manual Download
-
-Download the latest binary for your platform from [GitHub Releases](https://github.com/awaescher/llmaid/releases/latest).
-
-| Platform | File |
-|----------|------|
-| Windows x64 | `llmaid-windows-x64.zip` |
-| macOS ARM64 | `llmaid-macos-arm64.tar.gz` |
-| macOS x64 | `llmaid-macos-x64.tar.gz` |
-| Linux x64 | `llmaid-linux-x64.tar.gz` |
-
-### From Source
-
-```bash
-git clone https://github.com/awaescher/llmaid
-cd llmaid
-
-# edit ./llmaid/appsettings.json for provider settings
-# edit or create a profile in ./profiles/ for task-specific settings
-
-dotnet run --project llmaid
+llmaid --profile ./profiles/image-alt-text-generator.yaml --targetPath ./testfiles/alt-text-generator
 ```
 
 ## Configuration
@@ -179,20 +163,17 @@ systemPrompt: |
 All settings can be overridden via CLI:
 
 ```bash
-# Use a specific profile with dotnet run
-dotnet run --project llmaid -- --profile ./profiles/code-documenter.yaml
-
-# Use a specific profile (when running the compiled binary)
-llmaid --profile ./profiles/sql-injection-changer.yaml
+# Use a specific profile
+llmaid --profile ./profiles/code-documenter.yaml
 
 # Run without profile (all settings via CLI)
 llmaid --provider openai --model gpt-4o --targetPath ./src --systemPrompt "..."
 
 # Dry run to see which files would be processed
-llmaid -- --profile ./profiles/code-documenter.yaml --dryRun
+llmaid --profile ./profiles/code-documenter.yaml --dryRun
 
 # Verbose output with detailed token and timing information
-llmaid -- --profile ./profiles/code-documenter.yaml --verbose
+llmaid --profile ./profiles/code-documenter.yaml --verbose
 ```
 
 Available arguments:

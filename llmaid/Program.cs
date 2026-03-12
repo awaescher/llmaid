@@ -9,10 +9,32 @@ internal static class Program
 {
 	static async Task Main(string[] args)
 	{
+		// Let --help and --version be handled by System.CommandLine without further processing
+		if (args.Any(a => a is "-?" or "-h" or "--help" or "--version"))
+		{
+			CommandLineParser.Parse(args);
+			return;
+		}
+
 		using var cancellationTokenSource = new CancellationTokenSource();
 		var cancellationToken = cancellationTokenSource.Token;
 
-		var settings = await LoadSettings(args);
+		Settings settings;
+		try
+		{
+			settings = await LoadSettings(args);
+		}
+		catch (Exception ex) when (ex is ArgumentException or FileNotFoundException)
+		{
+			Console.ForegroundColor = ConsoleColor.Red;
+			Console.Error.WriteLine($"Error: {ex.Message}");
+			Console.ResetColor();
+			Console.Error.WriteLine();
+			Console.Error.WriteLine("Run with --help to see all available options.");
+			Environment.Exit(1);
+			return;
+		}
+
 		ConsoleLogger.Verbose = settings.Verbose ?? false;
 
 		InitializeLogging();
