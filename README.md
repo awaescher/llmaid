@@ -2,7 +2,7 @@
 
 Throw files against LLMs.
 
-llmaid is a command-line tool designed to automate the process of AI supported file changes using large language models. It reads source code files, sends them to Ollama, LM Studio, or any OpenAI-compatible API, and writes back the models answers. The tool is highly configurable and supports every kind of text-based input file.
+llmaid is a command-line tool designed to automate the process of AI supported file changes using large language models. It reads source code files, sends them to Ollama, LM Studio, or any OpenAI-compatible API, and writes back the models answers. The tool is highly configurable and supports every kind of text-based and most image input file formats.
 
 ---
 
