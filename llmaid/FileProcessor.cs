@@ -9,7 +9,7 @@ namespace llmaid;
 
 /// <summary>
 /// Processes individual files by sending them to the LLM and handling the response.
-/// Manages streaming, progress display, token tracking, and file writing.
+/// Manages streaming, progress display, token tracking, and file writing operations.
 /// </summary>
 internal class FileProcessor
 {
@@ -38,7 +38,7 @@ internal class FileProcessor
 
 	/// <summary>
 	/// Processes a single file: reads it, sends it to the LLM, and writes back the response.
-	/// Returns true if the file was processed successfully.
+	/// Returns true if the file was processed successfully; false otherwise.
 	/// </summary>
 	internal async Task<bool> ProcessAsync(string file, string retryMessage, CancellationToken cancellationToken)
 	{

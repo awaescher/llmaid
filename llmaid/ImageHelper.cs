@@ -14,8 +14,10 @@ internal static class ImageHelper
 	};
 
 	/// <summary>
-	/// Checks if a file is an image based on its extension.
+	/// Determines whether a file is an image based on its extension.
 	/// </summary>
+	/// <param name="filePath">The path to the file to check.</param>
+	/// <returns><c>true</c> if the file extension corresponds to a supported image format; otherwise, <c>false</c>.</returns>
 	internal static bool IsImageFile(string filePath)
 	{
 		return _imageExtensions.Contains(Path.GetExtension(filePath));
@@ -24,6 +26,8 @@ internal static class ImageHelper
 	/// <summary>
 	/// Gets the MIME type for an image file based on its extension.
 	/// </summary>
+	/// <param name="extension">The file extension (including the dot, e.g., ".png").</param>
+	/// <returns>The MIME type string for the image format, or "application/octet-stream" if unknown.</returns>
 	internal static string GetMimeType(string extension)
 	{
 		return extension.ToLowerInvariant() switch
@@ -44,6 +48,10 @@ internal static class ImageHelper
 	/// Loads and resizes an image file, returning it as a <see cref="DataContent"/> for multimodal chat messages.
 	/// Always resizes to fit within <paramref name="maxDimension"/> while preserving aspect ratio.
 	/// </summary>
+	/// <param name="filePath">The path to the image file to load.</param>
+	/// <param name="maxDimension">The maximum width and height in pixels for the resized image.</param>
+	/// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+	/// <returns>A task representing the asynchronous operation, containing the image data as a <see cref="DataContent"/>.</returns>
 	internal static async Task<DataContent> LoadContentAsync(string filePath, int maxDimension, CancellationToken cancellationToken)
 	{
 		var bytes = await File.ReadAllBytesAsync(filePath, cancellationToken);

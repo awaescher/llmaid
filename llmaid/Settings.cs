@@ -24,7 +24,7 @@ public class Settings
 	public string? Provider { get; set; }
 
 	/// <summary>
-	/// Minimum context length for the Ollama provider to prevent model unnecessary model reloads
+	/// Gets or sets the minimum context length for the Ollama provider to prevent unnecessary model reloads.
 	/// </summary>
 	[JsonPropertyName("ollamaMinNumCtx")]
 	public int OllamaMinNumCtx { get; set; } = 20480;
@@ -37,25 +37,26 @@ public class Settings
 	public string? ApiKey { get; set; }
 
 	/// <summary>
-	/// Gets or sets the URI endpoint for the API.
+	/// Gets or sets the URI endpoint for the API connection.
 	/// </summary>
 	[JsonPropertyName("uri")]
 	public Uri? Uri { get; set; }
 
 	/// <summary>
-	/// Gets or sets the model name to be used.
+	/// Gets or sets the model name to be used for generating responses.
 	/// </summary>
 	[JsonPropertyName("model")]
 	public string? Model { get; set; }
 
 	/// <summary>
 	/// Gets or sets the source path where files are located that should be processed.
+	/// Can point to a single file or a directory containing files to process.
 	/// </summary>
 	[JsonPropertyName("targetPath")]
 	public string? TargetPath { get; set; }
 
 	/// <summary>
-	/// Gets or sets the file glob patterns to search for.
+	/// Gets or sets the file glob patterns to search for when processing a directory.
 	/// </summary>
 	[JsonPropertyName("files")]
 	public Files? Files { get; set; }
@@ -67,14 +68,14 @@ public class Settings
 	public string? Profile { get; set; }
 
 	/// <summary>
-	/// Gets or sets a value indicating whether to write the models response to the console. Defaults to true.
+	/// Gets or sets a value indicating whether to write the model's response to the console. Defaults to true.
 	/// </summary>
 	[JsonPropertyName("writeResponseToConsole")]
 	public bool? WriteResponseToConsole { get; set; } = true;
 
 	/// <summary>
-	/// Gets or sets a value indicating whether to apply the codeblock from the model's response to the file.
-	/// If true, extracts the codeblock and overwrites the file. If false, outputs the response to console.
+	/// Gets or sets a value indicating whether to apply the code block from the model's response to the file.
+	/// If true, extracts the code block and overwrites the file. If false, outputs the response to console only.
 	/// </summary>
 	[JsonPropertyName("applyCodeblock")]
 	public bool? ApplyCodeblock { get; set; }
@@ -96,7 +97,7 @@ public class Settings
 
 	/// <summary>
 	/// Gets or sets the string that should be used to start the assistant's message.
-	/// Can be used to make the model think it started with the a code block already to prevent it from talking about it.
+	/// Can be used to make the model think it started with a code block already to prevent it from talking about it.
 	/// </summary>
 	[JsonPropertyName("assistantStarter")]
 	public string? AssistantStarter
@@ -106,19 +107,21 @@ public class Settings
 	}
 
 	/// <summary>
-	/// Gets or sets the temperature value for the model.
+	/// Gets or sets the temperature value for the model, controlling randomness in responses.
+	/// Higher values produce more creative output; lower values produce more deterministic results.
 	/// </summary>
 	[JsonPropertyName("temperature")]
 	public float? Temperature { get; set; }
 
 	/// <summary>
-	/// Gets or sets the system prompt to be used with the model
+	/// Gets or sets the system prompt to be used with the model.
+	/// Defines the behavior and constraints for the AI assistant.
 	/// </summary>
 	[JsonPropertyName("systemPrompt")]
 	public string? SystemPrompt { get; set; }
 
 	/// <summary>
-	/// Gets or sets the maximum number of retries of a reponse could not be processed
+	/// Gets or sets the maximum number of retries when a response could not be processed.
 	/// </summary>
 	[JsonPropertyName("maxRetries")]
 	public int? MaxRetries { get; set; }
@@ -183,6 +186,7 @@ public class Settings
 	/// Validates the current arguments, ensuring all required fields are properly set.
 	/// </summary>
 	/// <param name="requireProfile">If true, validates that a profile file exists. Set to false when running purely from CLI.</param>
+	/// <returns>A task representing the validation operation. Throws exceptions if validation fails.</returns>
 	public Task Validate(bool requireProfile = false)
 	{
 		if (string.IsNullOrEmpty(Uri?.AbsolutePath))
@@ -215,6 +219,11 @@ public class Settings
 		return Task.CompletedTask;
 	}
 
+	/// <summary>
+	/// Overrides the current settings with values from another Settings instance.
+	/// Only non-null property values are copied, allowing partial updates without overwriting existing configuration.
+	/// </summary>
+	/// <param name="newSettings">The settings instance containing values to copy from.</param>
 	public void OverrideWith(Settings newSettings)
 	{
 		foreach (var property in typeof(Settings).GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))

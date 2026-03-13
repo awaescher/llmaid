@@ -8,6 +8,11 @@ namespace llmaid;
 /// </summary>
 internal static class CommandLineParser
 {
+	/// <summary>
+	/// Parses command-line arguments into a <see cref="Settings"/> instance.
+	/// </summary>
+	/// <param name="args">The command-line arguments to parse.</param>
+	/// <returns>A populated <see cref="Settings"/> instance with values from the command-line arguments.</returns>
 	public static Settings Parse(string[] args)
 	{
 		static string MakeArgument(string value) => $"--{char.ToLowerInvariant(value[0])}{value[1..]}";

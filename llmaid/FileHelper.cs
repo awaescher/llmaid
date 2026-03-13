@@ -15,6 +15,7 @@ internal static class FileHelper
 	/// <summary>
 	/// Counts the actual number of tokens in a text using a real tokenizer.
 	/// </summary>
+	/// <param name="text">The text to count tokens for.</param>
 	internal static int CountTokens(string text)
 	{
 		if (string.IsNullOrEmpty(text))
@@ -26,6 +27,7 @@ internal static class FileHelper
 	/// <summary>
 	/// Returns a human-readable file size string (e.g. "12.3 kB").
 	/// </summary>
+	/// <param name="file">The path to the file.</param>
 	internal static string GetFileSizeString(string file)
 	{
 		try
@@ -41,6 +43,8 @@ internal static class FileHelper
 	/// <summary>
 	/// Reads a file and detects its encoding. Uses UTF-Unknown for BOM and content-based detection.
 	/// </summary>
+	/// <param name="file">The path to the file.</param>
+	/// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
 	internal static async Task<(string content, Encoding encoding)> ReadFileWithEncodingAsync(string file, CancellationToken cancellationToken)
 	{
 		var fileBytes = await File.ReadAllBytesAsync(file, cancellationToken);
@@ -72,6 +76,7 @@ internal static class FileHelper
 	/// Extracts the leading and trailing whitespace from a string.
 	/// Used to preserve original file whitespace when replacing content.
 	/// </summary>
+	/// <param name="text">The text to extract whitespace from.</param>
 	internal static (string leading, string trailing) ExtractWhitespace(string text)
 	{
 		if (string.IsNullOrEmpty(text))
@@ -90,6 +95,8 @@ internal static class FileHelper
 	/// <summary>
 	/// Estimates the number of response tokens the model will generate.
 	/// </summary>
+	/// <param name="settings">The settings that determine whether code blocks are applied.</param>
+	/// <param name="code">The source code to estimate tokens for.</param>
 	internal static int EstimateResponseTokens(Settings settings, string code)
 	{
 		var codeTokens = CountTokens(code);
@@ -103,6 +110,9 @@ internal static class FileHelper
 	/// <summary>
 	/// Estimates the total context length needed for a request.
 	/// </summary>
+	/// <param name="originalCode">The original source code.</param>
+	/// <param name="systemPrompt">The system prompt text.</param>
+	/// <param name="estimatedResponseTokens">The estimated number of tokens the model will generate.</param>
 	internal static int EstimateContextLength(string originalCode, string systemPrompt, int estimatedResponseTokens)
 	{
 		var contextLength = CountTokens(systemPrompt) + CountTokens(originalCode) + estimatedResponseTokens;
@@ -112,6 +122,7 @@ internal static class FileHelper
 	/// <summary>
 	/// Maps a file extension to a code language identifier for markdown code blocks.
 	/// </summary>
+	/// <param name="fileExtension">The file extension (e.g. ".cs", ".js").</param>
 	internal static string GetCodeLanguageByFileExtension(string fileExtension)
 	{
 		return fileExtension.ToLower() switch
@@ -186,6 +197,8 @@ internal static class FileHelper
 	/// <summary>
 	/// Checks whether the raw file bytes start with the BOM (preamble) of the given encoding.
 	/// </summary>
+	/// <param name="fileBytes">The raw file bytes to check.</param>
+	/// <param name="encoding">The encoding whose BOM to look for.</param>
 	private static bool HasByteOrderMark(byte[] fileBytes, Encoding encoding)
 	{
 		var preamble = encoding.GetPreamble();
@@ -200,6 +213,8 @@ internal static class FileHelper
 	/// Returns an encoding instance whose BOM emission behavior matches the original file.
 	/// For UTF-8 and Unicode encodings, this ensures the BOM is preserved (or omitted) on write.
 	/// </summary>
+	/// <param name="encoding">The encoding to configure.</param>
+	/// <param name="hasBom">Whether the original file had a BOM.</param>
 	private static Encoding EnsureBomBehavior(Encoding encoding, bool hasBom)
 	{
 		// UTF-8: control BOM emission explicitly
@@ -230,6 +245,7 @@ internal static class FileHelper
 	/// Detects the dominant line ending style in a text string.
 	/// Returns "\r\n" for Windows, "\r" for old Mac, or "\n" for Unix (default).
 	/// </summary>
+	/// <param name="text">The text to analyze.</param>
 	internal static string DetectLineEnding(string text)
 	{
 		var crlf = 0;
@@ -271,6 +287,8 @@ internal static class FileHelper
 	/// <summary>
 	/// Normalizes all line endings in a text string to the specified line ending.
 	/// </summary>
+	/// <param name="text">The text to normalize.</param>
+	/// <param name="lineEnding">The target line ending style (e.g. "\n", "\r\n").</param>
 	internal static string NormalizeLineEndings(string text, string lineEnding)
 	{
 		// First normalize everything to \n, then replace with the target

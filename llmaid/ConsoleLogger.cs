@@ -11,7 +11,7 @@ internal static class ConsoleLogger
 	internal static bool Verbose { get; set; }
 
 	/// <summary>
-	/// Writes the file header (always visible, in white).
+	/// Writes a file header message to the console and log.
 	/// </summary>
 	internal static void LogFileHeader(string message)
 	{
@@ -20,7 +20,7 @@ internal static class ConsoleLogger
 	}
 
 	/// <summary>
-	/// Writes the result output (always visible, in cyan).
+	/// Writes a result message to the console and log.
 	/// </summary>
 	internal static void LogResult(string message)
 	{
@@ -29,7 +29,7 @@ internal static class ConsoleLogger
 	}
 
 	/// <summary>
-	/// Writes informational output only in verbose mode.
+	/// Writes informational output to the console and log when verbose mode is enabled.
 	/// </summary>
 	internal static void LogVerboseInfo(string message)
 	{
@@ -39,7 +39,7 @@ internal static class ConsoleLogger
 	}
 
 	/// <summary>
-	/// Writes detailed output only in verbose mode.
+	/// Writes detailed output to the console and log when verbose mode is enabled.
 	/// </summary>
 	internal static void LogVerboseDetail(string message)
 	{
@@ -67,7 +67,7 @@ internal static class ConsoleLogger
 	}
 
 	/// <summary>
-	/// Writes a Spectre.Console markup line (raw markup, not escaped).
+	/// Writes a Spectre.Console markup line to the console.
 	/// </summary>
 	internal static void LogMarkup(string markup)
 	{

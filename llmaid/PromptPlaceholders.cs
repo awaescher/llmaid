@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 namespace llmaid;
 
 /// <summary>
-/// Replaces well-known system placeholders in prompt strings.
+/// Replaces common system-level placeholders in prompt strings.
 /// Placeholders use the {{NAME}} convention and are resolved once per run
 /// using the current system environment and locale.
 /// </summary>
@@ -37,7 +37,7 @@ namespace llmaid;
 internal static class PromptPlaceholders
 {
 	/// <summary>
-	/// Replaces all known system-level {{PLACEHOLDER}} tokens in <paramref name="prompt"/> with their current values.
+	/// Replaces all known system-level {{PLACEHOLDER}} tokens in the prompt with their current values.
 	/// File-specific placeholders ({{CODE}}, {{CODELANGUAGE}}, {{FILENAME}}) are substituted separately
 	/// by <see cref="FileProcessor"/> after this method runs.
 	/// </summary>
