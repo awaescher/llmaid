@@ -16,9 +16,10 @@ public class Settings
 	public bool IsEmpty => string.IsNullOrWhiteSpace(Provider);
 
 	/// <summary>
-	/// Gets or sets the provider name, which must be 'ollama', 'openai', 'lmstudio', or 'openai-compatible'.
+	/// Gets or sets the provider name, which must be 'ollama', 'openai', 'lmstudio', 'openai-compatible', or 'minimax'.
 	/// Use 'lmstudio' for LM Studio's local API (default: http://localhost:1234/v1).
 	/// Use 'openai-compatible' for any other OpenAI-compatible API endpoints.
+	/// Use 'minimax' for MiniMax's API (default: https://api.minimax.io/v1).
 	/// </summary>
 	[JsonPropertyName("provider")]
 	public string? Provider { get; set; }
@@ -195,9 +196,10 @@ public class Settings
 		var knownProvider = "ollama".Equals(Provider, StringComparison.OrdinalIgnoreCase)
 			|| "openai".Equals(Provider, StringComparison.OrdinalIgnoreCase)
 			|| "lmstudio".Equals(Provider, StringComparison.OrdinalIgnoreCase)
-			|| "openai-compatible".Equals(Provider, StringComparison.OrdinalIgnoreCase);
+			|| "openai-compatible".Equals(Provider, StringComparison.OrdinalIgnoreCase)
+			|| "minimax".Equals(Provider, StringComparison.OrdinalIgnoreCase);
 		if (!knownProvider)
-			throw new ArgumentException("Provider has to be 'ollama', 'openai', 'lmstudio', or 'openai-compatible'.");
+			throw new ArgumentException("Provider has to be 'ollama', 'openai', 'lmstudio', 'openai-compatible', or 'minimax'.");
 
 		if (string.IsNullOrEmpty(TargetPath))
 			throw new ArgumentException("Target path has to be defined.");

@@ -5,7 +5,7 @@ using OllamaSharp;
 namespace llmaid;
 
 /// <summary>
-/// Creates an <see cref="IChatClient"/> for the configured provider (Ollama, LM Studio, OpenAI).
+/// Creates an <see cref="IChatClient"/> for the configured provider (Ollama, LM Studio, OpenAI, MiniMax).
 /// </summary>
 internal static class ChatClientFactory
 {
@@ -17,6 +17,9 @@ internal static class ChatClientFactory
 
 		if (provider.Equals("ollama", StringComparison.OrdinalIgnoreCase))
 			return CreateOllamaClient(settings);
+
+		if (provider.Equals("minimax", StringComparison.OrdinalIgnoreCase))
+			return CreateMiniMaxClient(settings);
 
 		if (provider.Equals("lmstudio", StringComparison.OrdinalIgnoreCase) || provider.Equals("openai-compatible", StringComparison.OrdinalIgnoreCase))
 			return CreateOpenAICompatibleClient(settings);
@@ -41,6 +44,21 @@ internal static class ChatClientFactory
 		var options = new OpenAI.OpenAIClientOptions { Endpoint = settings.Uri, NetworkTimeout = _networkTimeout };
 		return new OpenAI.OpenAIClient(new ApiKeyCredential(apiKey), options)
 			.GetChatClient(settings.Model ?? string.Empty)
+			.AsIChatClient();
+	}
+
+	/// <summary>
+	/// Creates a client for MiniMax using its OpenAI-compatible API.
+	/// Default endpoint: https://api.minimax.io/v1.
+	/// API key is required and can be set via the MINIMAX_API_KEY environment variable.
+	/// </summary>
+	private static IChatClient CreateMiniMaxClient(Settings settings)
+	{
+		var apiKey = settings.ApiKey ?? string.Empty;
+		var endpoint = settings.Uri ?? new Uri("https://api.minimax.io/v1");
+		var options = new OpenAI.OpenAIClientOptions { Endpoint = endpoint, NetworkTimeout = _networkTimeout };
+		return new OpenAI.OpenAIClient(new ApiKeyCredential(apiKey), options)
+			.GetChatClient(settings.Model ?? "MiniMax-M2.5")
 			.AsIChatClient();
 	}
 
