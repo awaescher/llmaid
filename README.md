@@ -2,7 +2,7 @@
 
 Throw files against LLMs.
 
-llmaid is a command-line tool designed to automate the process of AI supported file changes using large language models. It reads source code files, sends them to Ollama, LM Studio, or any OpenAI-compatible API, and writes back the models answers. The tool is highly configurable and supports every kind of text-based and most image input file formats.
+llmaid is a command-line tool designed to automate the process of AI supported file changes using large language models. It reads source code files, sends them to Ollama, LM Studio, MiniMax, or any OpenAI-compatible API, and writes back the models answers. The tool is highly configurable and supports every kind of text-based and most image input file formats.
 
 ---
 
@@ -175,7 +175,7 @@ llmaid --profile ./profiles/code-documenter.yaml --verbose
 ```
 
 Available arguments:
-- `--provider` – ollama, openai, lmstudio, openai-compatible
+- `--provider` – ollama, openai, lmstudio, openai-compatible, minimax
 - `--uri` – API endpoint URL
 - `--apiKey` – API key (if required)
 - `--model` – Model identifier
@@ -205,8 +205,25 @@ Available arguments:
 | `ollama` | `http://localhost:11434` | No |
 | `lmstudio` | `http://localhost:1234/v1` | No (use empty string or any placeholder) |
 | `openai` | `https://api.openai.com/v1` | Yes |
+| `minimax` | `https://api.minimax.io/v1` | Yes |
 | `openai-compatible` | Your server's URL | Depends on server |
 
+
+#### MiniMax
+
+[MiniMax](https://www.minimax.io) provides high-performance models with a 204,800 token context window. Available models:
+
+| Model | Description |
+|-------|-------------|
+| `MiniMax-M2.5` | Default model – peak performance, ultimate value |
+| `MiniMax-M2.5-highspeed` | Same performance, faster and more agile |
+
+```bash
+llmaid --provider minimax --apiKey YOUR_MINIMAX_API_KEY --model MiniMax-M2.5 --profile ./profiles/code-documenter.yaml --targetPath ./src
+```
+
+> [!NOTE]
+> MiniMax requires a temperature value between 0 and 1 (exclusive of 0). If you use `--temperature`, make sure to set it to a value greater than 0 (e.g. `0.01` instead of `0`).
 
 ### System Prompt Placeholders
 
