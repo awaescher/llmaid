@@ -11,6 +11,12 @@ internal static class ConsoleLogger
 	internal static bool Verbose { get; set; }
 
 	/// <summary>
+	/// When true, the full system prompt, user message, and LLM response are printed
+	/// for every LLM call. Implies <see cref="Verbose"/>.
+	/// </summary>
+	internal static bool Diagnostic { get; set; }
+
+	/// <summary>
 	/// Writes a file header message to the console and log.
 	/// </summary>
 	internal static void LogFileHeader(string message)
@@ -64,6 +70,21 @@ internal static class ConsoleLogger
 	{
 		WriteLine("cyan", message);
 		Log.Debug(Environment.NewLine + message);
+	}
+
+	/// <summary>
+	/// Writes a labeled diagnostic block to the console when <see cref="Diagnostic"/> is enabled.
+	/// Prints the label as a header line, then the content, then a closing rule line.
+	/// </summary>
+	internal static void LogDiagnosticBlock(string label, string content)
+	{
+		if (!Diagnostic)
+			return;
+
+		var rule = new string('─', 60);
+		AnsiConsole.MarkupLine($"[gray]┌─ {Markup.Escape(label)} {rule}[/]");
+		AnsiConsole.MarkupLine($"[gray]{Markup.Escape(content.Trim())}[/]");
+		AnsiConsole.MarkupLine($"[gray]└─{rule}[/]");
 	}
 
 	/// <summary>

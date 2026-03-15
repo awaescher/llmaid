@@ -7,6 +7,53 @@ applyCodeblock: true
 assistantStarter: ""
 maxRetries: 1
 
+# ── Judge configuration (optional) ───────────────────────────────────────────
+# The judge is an optional second LLM call that verifies the AI's output against
+# the task instructions. When the judge rejects the output it feeds the specific
+# violations back to the editing LLM so it can retry.
+#
+# judgeMode controls what the judge evaluates:
+#
+#   response  (default) — evaluates the raw LLM response before writing to disk.
+#                         Works always, no git repository required.
+#                         Best for: any profile, including applyCodeblock: false.
+#
+#   git-diff            — evaluates the actual git diff after writing to disk.
+#                         Sees only the lines that changed, making it very precise
+#                         for catching subtle code modifications in long files.
+#                         ⚠️  Requires: applyCodeblock: true + git repository.
+#
+#   both                — runs the response-judge first (before writing), then
+#                         the git-diff judge after writing. Maximum coverage.
+#                         ⚠️  Requires: applyCodeblock: true + git repository
+#                             (for the git-diff step).
+#
+# All judge connection settings are optional and fall back to the main provider
+# when not set — only specify them to use a different model or endpoint for judging.
+#
+judgeMaxRetries: 2          # How many times the judge may reject and trigger a retry (0 = disabled)
+judgeMode: git-diff         # response (default) | git-diff | both
+# judgeModel: omnicoder-9b # Override model for judge calls (falls back to 'model' when omitted)
+# judgeProvider: lmstudio     # Override provider for judge calls (falls back to 'provider' when omitted)
+# judgeUri: http://localhost:1234/v1  # Override URI for judge calls (falls back to 'uri' when omitted)
+# judgeApiKey: ""             # Override API key for judge calls (falls back to 'apiKey' when omitted)
+#
+# judgeSystemPrompt: |
+#   You are a strict code review judge for documentation-only changes.
+#   You receive:
+#   1. The documentation task instructions the AI editor had to follow
+#   2. Either the original file + AI response (response mode) or a git diff (git-diff mode)
+#
+#   PASS if only documentation comments were added or improved and no
+#   executable code was touched.
+#
+#   FAIL with a bullet list of violations if ANY of these occurred:
+#   - Executable code was modified (logic, variables, operators, formatting, imports, etc.)
+#   - Existing documentation was removed without a replacement
+#   - Private, protected, or internal members received new documentation
+#   - Any other change not explicitly permitted by the task instructions
+# ─────────────────────────────────────────────────────────────────────────────
+
 files:
   include:
     - "**/*.{cs,vb,js,jsx,ts,tsx,sol,py,java,kt,swift,rb,php,cpp,c,h,m,mm,go,rs,scala,sql}"

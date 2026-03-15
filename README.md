@@ -197,6 +197,61 @@ Available arguments:
 - `--showProgress` – Show progress indicator during file processing (default: true)
 - `--reasoningTimeoutSeconds` – Maximum seconds a model may spend reasoning before the request is cancelled (default: 600, 0 = disabled)
 - `--maxImageDimension` – Maximum image dimension in pixels, images are resized to fit while preserving aspect ratio (default: 2048)
+- `--judgeMaxRetries` – Maximum judge review cycles per file (0 or omit = disabled). The judge evaluates the AI output against your task instructions and triggers a retry with specific violation feedback when rejected.
+- `--judgeMode` – Judge evaluation mode: `response` (default), `git-diff`, or `both` (see [Judge](#judge-optional-quality-gate) section)
+- `--judgeModel` – Model for judge calls (falls back to `--model` when not set)
+- `--judgeProvider` – Provider for judge calls (falls back to `--provider` when not set)
+- `--judgeUri` – API endpoint for judge calls (falls back to `--uri` when not set)
+- `--judgeApiKey` – API key for judge calls (falls back to `--apiKey` when not set)
+- `--judgeSystemPrompt` – Custom system prompt for the judge LLM (uses a built-in default when not set)
+
+### Judge (Optional Quality Gate)
+
+The judge is an optional second LLM call that verifies the AI's output against the task instructions. When it rejects the output, it feeds the specific violations back to the editing LLM so it can retry — up to `judgeMaxRetries` times.
+
+#### Judge Modes
+
+| Mode | When it evaluates | Requirements |
+|------|------------------|--------------|
+| `response` | Before writing — evaluates the raw LLM response | None — works always, even without git or `applyCodeblock` |
+| `git-diff` | After writing — evaluates the actual git diff | `applyCodeblock: true` + target files inside a git repository |
+| `both` | Response-judge first (pre-write), then git-diff judge after writing | `applyCodeblock: true` + git repository (for the git-diff step) |
+
+**`response` mode** is the default. It works in all situations: with or without git, with or without `applyCodeblock`. The judge sees the original file content and the AI's full response and checks whether every change complies with the instructions.
+
+**`git-diff` mode** is particularly useful for profiles that modify long files (such as `code-documenter`), because the diff shows only the changed lines — making it much easier for the judge to spot subtle, forbidden code changes.
+
+**`both` mode** combines both: the response is validated before writing (catching formatting or hallucination issues early), and the final diff is validated after writing (catching subtle line-level changes).
+
+#### Example configuration
+
+```yaml
+judgeMaxRetries: 2
+judgeMode: response      # or git-diff / both
+
+# Optional: use a larger model for judging than for editing
+# judgeModel: qwen3-235b-a22b
+# judgeProvider: lmstudio
+# judgeUri: http://localhost:1234/v1
+```
+
+#### Custom judge system prompt
+
+Override the built-in judge prompt for fine-grained control:
+
+```yaml
+judgeSystemPrompt: |
+  You are a strict code review judge for documentation-only changes.
+  You receive the task instructions and either the original + new file (response mode)
+  or a git diff (git-diff mode).
+
+  PASS if only documentation comments were added or improved and no executable code was touched.
+
+  FAIL with a bullet list of violations if ANY of these occurred:
+  - Executable code was modified
+  - Existing documentation was removed without a replacement
+  - Private, protected, or internal members received new documentation
+```
 
 ### Supported Providers
 

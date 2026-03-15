@@ -136,6 +136,14 @@ public class Settings
 	public bool? Verbose { get; set; }
 
 	/// <summary>
+	/// Gets or sets a value indicating whether to output diagnostic information.
+	/// When true, the full system prompt, user message, and LLM response are printed
+	/// for every LLM call (both the editor and the judge). Implies verbose mode.
+	/// </summary>
+	[JsonPropertyName("diagnostic")]
+	public bool? Diagnostic { get; set; }
+
+	/// <summary>
 	/// Gets or sets the cooldown time in seconds to wait after processing each file.
 	/// This can be used to prevent processor overheating during batch processing.
 	/// Default is 0 (no cooldown).
@@ -182,6 +190,92 @@ public class Settings
 	/// </summary>
 	[JsonPropertyName("maxImageDimension")]
 	public int? MaxImageDimension { get; set; } = 2048;
+
+	// ── Judge settings ────────────────────────────────────────────────────────
+	// The judge is an optional second LLM call that verifies the AI's output
+	// against the task instructions and triggers a retry with specific violation
+	// feedback when rejected. Two evaluation modes are available:
+	//
+	//   • "response"  — evaluates the raw LLM response before writing (default).
+	//                   Works always, even without git or applyCodeblock.
+	//   • "git-diff"  — evaluates the actual git diff after writing.
+	//                   Requires applyCodeblock=true and a git repository.
+	//   • "both"      — response-judge first, then git-diff-judge after writing.
+	//                   Requires applyCodeblock=true and a git repository for the
+	//                   git-diff step.
+	//
+	// All judge-specific connection settings below are optional and fall back to
+	// the corresponding main-provider values when not specified.
+
+	/// <summary>
+	/// Gets or sets the maximum number of judge review cycles per file.
+	/// When the judge rejects the changes, the LLM is asked to retry with the
+	/// judge's specific violation feedback.
+	/// Set to 0 or leave empty to disable the judge entirely.
+	/// </summary>
+	[JsonPropertyName("judgeMaxRetries")]
+	public int? JudgeMaxRetries { get; set; }
+
+	/// <summary>
+	/// Gets or sets the judge evaluation mode.
+	/// <list type="bullet">
+	///   <item><term>response</term><description>Judge evaluates the raw LLM response before writing. Works always, even without git or applyCodeblock (default).</description></item>
+	///   <item><term>git-diff</term><description>Judge evaluates the actual git diff after writing. Requires <see cref="ApplyCodeblock"/> to be true and the target files to reside inside a git repository.</description></item>
+	///   <item><term>both</term><description>Response-judge runs first (before writing), then git-diff-judge runs after writing. Git-diff step requires <see cref="ApplyCodeblock"/> and a git repository.</description></item>
+	/// </list>
+	/// When not specified, defaults to <c>response</c>.
+	/// </summary>
+	[JsonPropertyName("judgeMode")]
+	public string? JudgeMode { get; set; }
+
+	/// <summary>
+	/// Gets or sets the system prompt used by the judge LLM.
+	/// The judge receives this prompt together with the original task instructions
+	/// and either the raw LLM response or the git diff (depending on
+	/// <see cref="JudgeMode"/>), and must respond with PASS or FAIL followed by
+	/// a bullet list of violations.
+	/// When not specified, a built-in default prompt is used.
+	/// </summary>
+	[JsonPropertyName("judgeSystemPrompt")]
+	public string? JudgeSystemPrompt { get; set; }
+
+	/// <summary>
+	/// Gets or sets the model used for judge calls.
+	/// Only specify this when you want to use a different model than the main
+	/// editing model (e.g. a larger or more capable model for stricter review).
+	/// Falls back to <see cref="Model"/> when not specified.
+	/// </summary>
+	[JsonPropertyName("judgeModel")]
+	public string? JudgeModel { get; set; }
+
+	/// <summary>
+	/// Gets or sets the provider used for judge calls ('ollama', 'openai',
+	/// 'lmstudio', or 'openai-compatible').
+	/// Only specify this when the judge should use a different provider than the
+	/// main editing provider (e.g. a cloud API for judging while editing runs
+	/// locally).
+	/// Falls back to <see cref="Provider"/> when not specified.
+	/// </summary>
+	[JsonPropertyName("judgeProvider")]
+	public string? JudgeProvider { get; set; }
+
+	/// <summary>
+	/// Gets or sets the API endpoint URI for judge calls.
+	/// Only specify this when the judge should connect to a different server than
+	/// the main editing provider.
+	/// Falls back to <see cref="Uri"/> when not specified.
+	/// </summary>
+	[JsonPropertyName("judgeUri")]
+	public Uri? JudgeUri { get; set; }
+
+	/// <summary>
+	/// Gets or sets the API key for judge calls.
+	/// Only specify this when the judge provider requires a different key than the
+	/// main editing provider.
+	/// Falls back to <see cref="ApiKey"/> when not specified.
+	/// </summary>
+	[JsonPropertyName("judgeApiKey")]
+	public string? JudgeApiKey { get; set; }
 
 	/// <summary>
 	/// Validates the current arguments, ensuring all required fields are properly set.

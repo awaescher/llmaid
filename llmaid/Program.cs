@@ -48,7 +48,8 @@ internal static class Program
 			return;
 		}
 
-		ConsoleLogger.Verbose = settings.Verbose ?? false;
+		ConsoleLogger.Diagnostic = settings.Diagnostic ?? false;
+		ConsoleLogger.Verbose = (settings.Verbose ?? false) || ConsoleLogger.Diagnostic;
 
 		InitializeLogging();
 
@@ -59,7 +60,51 @@ internal static class Program
 		var files = DiscoverFiles(settings);
 		var processor = new FileProcessor(chatClient, settings, Stopwatch.StartNew());
 
-		await ProcessAllFiles(files, settings, processor, cancellationToken);
+		var judgeEnabled = (settings.JudgeMaxRetries ?? 0) > 0;
+		var judgeMode = (settings.JudgeMode ?? "response").Trim().ToLowerInvariant();
+		var useGitDiffJudge = judgeEnabled && (judgeMode is "git-diff" or "both");
+		var applyCodeblock = settings.ApplyCodeblock ?? true;
+
+		if (judgeMode is not ("response" or "git-diff" or "both"))
+		{
+			Console.ForegroundColor = ConsoleColor.Red;
+			Console.Error.WriteLine($"Error: Unknown judgeMode '{judgeMode}'. Valid values are: 'response', 'git-diff', 'both'.");
+			Console.ResetColor();
+			Environment.Exit(1);
+			return;
+		}
+
+		JudgeProcessor? judge = null;
+
+		if (judgeEnabled)
+		{
+			// Validate git-diff mode preconditions at startup
+			if (useGitDiffJudge)
+			{
+				if (!applyCodeblock)
+				{
+					Console.ForegroundColor = ConsoleColor.Yellow;
+					Console.Error.WriteLine($"Warning: judgeMode '{judgeMode}' has no effect when applyCodeblock is false.");
+					Console.Error.WriteLine("         No file is written, so no git diff is produced.");
+					Console.Error.WriteLine("         Switch to judgeMode 'response' or enable applyCodeblock: true.");
+					Console.ResetColor();
+				}
+				else if (!await GitHelper.IsInsideGitRepoAsync(settings.TargetPath!))
+				{
+					Console.ForegroundColor = ConsoleColor.Red;
+					Console.Error.WriteLine($"Error: judgeMode '{judgeMode}' requires the target path to be inside a git repository.");
+					Console.Error.WriteLine($"       Either switch to judgeMode 'response' (works without git), or run llmaid against files inside a git repository.");
+					Console.ResetColor();
+					Environment.Exit(1);
+					return;
+				}
+			}
+
+			var judgeClient = ChatClientFactory.CreateJudgeClient(settings);
+			judge = new JudgeProcessor(judgeClient, settings);
+		}
+
+		await ProcessAllFiles(files, settings, processor, judge, judgeMode, cancellationToken);
 	}
 
 	/// <summary>
@@ -117,7 +162,7 @@ internal static class Program
 		return loader.GetAll(settings.TargetPath ?? string.Empty, settings.Files ?? new Files([], []));
 	}
 
-	private static async Task ProcessAllFiles(string[] files, Settings settings, FileProcessor processor, CancellationToken cancellationToken)
+	private static async Task ProcessAllFiles(string[] files, Settings settings, FileProcessor processor, JudgeProcessor? judge, string judgeMode, CancellationToken cancellationToken)
 	{
 		var fileCount = files.Length;
 		var errors = 0;
@@ -143,7 +188,7 @@ internal static class Program
 
 			ConsoleLogger.LogFileHeader($"[{fileIndex}/{fileCount}] {file} ({FileHelper.GetFileSizeString(file)})");
 
-			var success = await ProcessFileWithRetries(file, settings, processor, cancellationToken);
+			var success = await ProcessFileWithJudge(file, settings, processor, judge, judgeMode, cancellationToken);
 
 			if (!success)
 				errors++;
@@ -152,10 +197,169 @@ internal static class Program
 		}
 	}
 
-	private static async Task<bool> ProcessFileWithRetries(string file, Settings settings, FileProcessor processor, CancellationToken cancellationToken)
+	/// <summary>
+	/// Outer judge loop. Orchestrates the two-phase flow:
+	/// <list type="bullet">
+	///   <item><term>response mode</term><description>After streaming, the response-judge evaluates the raw LLM output before writing.</description></item>
+	///   <item><term>git-diff mode</term><description>After writing, the git-diff judge evaluates the actual diff.</description></item>
+	///   <item><term>both</term><description>Response-judge runs first (pre-write); git-diff judge runs after writing.</description></item>
+	/// </list>
+	/// When no judge is configured the method delegates directly to
+	/// <see cref="ProcessFileWithRetries"/> without any overhead.
+	/// </summary>
+	private static async Task<bool> ProcessFileWithJudge(string file, Settings settings, FileProcessor processor, JudgeProcessor? judge, string judgeMode, CancellationToken cancellationToken)
+	{
+		var judgeMaxRetries = settings.JudgeMaxRetries ?? 0;
+		var applyCodeblock = settings.ApplyCodeblock ?? true;
+
+		// No judge configured — stream and write in one shot
+		if (judge == null || judgeMaxRetries <= 0 || settings.DryRun)
+		{
+			var noJudgeResult = await ProcessFileWithRetries(file, settings, processor, string.Empty, cancellationToken);
+			if (!noJudgeResult.Success)
+				return false;
+
+			return await processor.WriteResponseAsync(file, noJudgeResult, cancellationToken);
+		}
+
+		var useResponseJudge = judgeMode is "response" or "both";
+		var useGitDiffJudge = judgeMode is "git-diff" or "both";
+
+		// git-diff judge requires file changes to be written and applyCodeblock=true
+		var gitDiffJudgeActive = useGitDiffJudge && applyCodeblock;
+
+		// Remember original content for git-diff mode (to restore on rejection)
+		string? originalContent = null;
+		if (gitDiffJudgeActive)
+		{
+			try
+			{
+				originalContent = await File.ReadAllTextAsync(file, cancellationToken);
+			}
+			catch (Exception ex)
+			{
+				// Binary/unreadable files — skip the git-diff judge, run response-only
+				ConsoleLogger.LogVerboseDetail($"Judge: cannot read '{Path.GetFileName(file)}' as text ({ex.GetType().Name}), git-diff judge skipped.");
+				gitDiffJudgeActive = false;
+			}
+		}
+
+		var judgeRetryMessage = string.Empty;
+
+		for (var judgeAttempt = 1; judgeAttempt <= judgeMaxRetries; judgeAttempt++)
+		{
+			// ── Phase 1: Stream LLM response (no write yet) ──────────────────
+			var result = await ProcessFileWithRetries(file, settings, processor, judgeRetryMessage, cancellationToken);
+			if (!result.Success)
+				return false;
+
+			// ── Phase 2: Response-judge (pre-write) ──────────────────────────
+			if (useResponseJudge && !result.IsImage && result.OriginalCode != null)
+			{
+				var responseJudgeStopwatch = Stopwatch.StartNew();
+				var responseVerdict = await judge.EvaluateResponseAsync(
+					result.OriginalCode,
+					result.ResponseText,
+					settings.SystemPrompt ?? string.Empty,
+					cancellationToken);
+				responseJudgeStopwatch.Stop();
+
+				processor.AccumulateJudgeTokens(responseVerdict.Usage, responseJudgeStopwatch);
+
+				if (!responseVerdict.Passed)
+				{
+					var isLastAttempt = judgeAttempt >= judgeMaxRetries;
+					var failHeader = !isLastAttempt
+						? $"Judge [{judgeAttempt}/{judgeMaxRetries}]: ✗ FAIL — retrying without writing"
+						: $"Judge [{judgeAttempt}/{judgeMaxRetries}]: ✗ FAIL — maximum review cycles reached, file not written";
+
+					ConsoleLogger.LogWarning(failHeader);
+					foreach (var violation in responseVerdict.Violations)
+						ConsoleLogger.LogWarning($"  • {violation}");
+
+					if (!isLastAttempt)
+					{
+						var violationList = string.Join(Environment.NewLine, responseVerdict.Violations.Select(v => $"  - {v}"));
+						judgeRetryMessage = $"""
+							A judge has reviewed your response and found the following violations of the task instructions:
+
+							{violationList}
+
+							Please redo the task, specifically addressing each violation listed above. Do NOT repeat these mistakes.
+							""";
+					}
+
+					continue; // retry — do not write
+				}
+
+				ConsoleLogger.LogResult($"Judge [{judgeAttempt}/{judgeMaxRetries}]: ✓ PASS");
+			}
+	
+			// ── Phase 3: Write response to disk (or console) ─────────────────
+			var writeSuccess = await processor.WriteResponseAsync(file, result, cancellationToken);
+			if (!writeSuccess)
+				return false;
+	
+			// ── Phase 4: Git-diff judge (post-write) ─────────────────────────
+			if (!gitDiffJudgeActive)
+				return true;
+	
+			var diff = await GitHelper.GetDiffAsync(file);
+
+			if (string.IsNullOrWhiteSpace(diff))
+			{
+				// No changes were made — treat as pass (LLM said OK, nothing to judge)
+				ConsoleLogger.LogVerboseDetail("Judge: no diff detected, skipping git-diff review.");
+				return true;
+			}
+
+			var diffJudgeStopwatch = Stopwatch.StartNew();
+			var diffVerdict = await judge.EvaluateAsync(diff, settings.SystemPrompt ?? string.Empty, cancellationToken);
+			diffJudgeStopwatch.Stop();
+
+			processor.AccumulateJudgeTokens(diffVerdict.Usage, diffJudgeStopwatch);
+
+			if (diffVerdict.Passed)
+			{
+				ConsoleLogger.LogResult($"Judge [{judgeAttempt}/{judgeMaxRetries}]: ✓ PASS");
+				return true;
+			}
+	
+			// Diff-judge rejected — log violations and restore the file
+			var diffIsLastAttempt = judgeAttempt >= judgeMaxRetries;
+			var diffFailHeader = !diffIsLastAttempt
+				? $"Judge [{judgeAttempt}/{judgeMaxRetries}]: ✗ FAIL — restoring file and retrying"
+				: $"Judge [{judgeAttempt}/{judgeMaxRetries}]: ✗ FAIL — maximum review cycles reached, restoring original file";
+
+			ConsoleLogger.LogWarning(diffFailHeader);
+			foreach (var violation in diffVerdict.Violations)
+				ConsoleLogger.LogWarning($"  • {violation}");
+
+			// Restore original content so the next attempt starts clean
+			if (originalContent != null)
+				await File.WriteAllTextAsync(file, originalContent, cancellationToken);
+
+			if (!diffIsLastAttempt)
+			{
+				var violationList = string.Join(Environment.NewLine, diffVerdict.Violations.Select(v => $"  - {v}"));
+				judgeRetryMessage = $"""
+					A judge has reviewed the changes you made and found the following violations of the task instructions:
+
+					{violationList}
+
+					Please redo the task, specifically addressing each violation listed above. Do NOT repeat these mistakes.
+					""";
+			}
+		}
+
+		ConsoleLogger.LogWarning($"Judge: all {judgeMaxRetries} review cycle(s) exhausted — skipping file");
+		return false;
+	}
+
+	private static async Task<ProcessResult> ProcessFileWithRetries(string file, Settings settings, FileProcessor processor, string judgeRetryMessage, CancellationToken cancellationToken)
 	{
 		var attempt = 0;
-		var success = false;
+		ProcessResult result = new(false, string.Empty, null, null, false);
 
 		do
 		{
@@ -164,18 +368,21 @@ internal static class Program
 			if (attempt > 1)
 				ConsoleLogger.LogVerboseDetail("Attempt " + attempt);
 
-			var retryMessage = attempt > 1
+			var internalRetryNotice = attempt > 1
 				? $"This is the {attempt}. attempt to process this file, all prior attempts failed because your response could not be processed. Please follow the instructions more closely."
-				: "";
+				: string.Empty;
+
+			var retryParts = new[] { judgeRetryMessage, internalRetryNotice }.Where(s => !string.IsNullOrEmpty(s));
+			var retryMessage = string.Join(Environment.NewLine + Environment.NewLine, retryParts);
 
 			if (settings.DryRun)
-				success = true;
+				result = new ProcessResult(true, string.Empty, null, null, false);
 			else
-				success = await processor.ProcessAsync(file, retryMessage, cancellationToken);
+				result = await processor.ProcessAsync(file, retryMessage, cancellationToken);
 
-		} while (!success && attempt < settings.MaxRetries);
+		} while (!result.Success && attempt < settings.MaxRetries);
 
-		return success;
+		return result;
 	}
 
 	private static async Task ApplyCooldown(Settings settings, CancellationToken cancellationToken)

@@ -8,6 +8,17 @@ using Spectre.Console;
 namespace llmaid;
 
 /// <summary>
+/// Holds the result of a single file-processing cycle (streaming phase only).
+/// The caller decides whether and when to write the response to disk.
+/// </summary>
+internal record ProcessResult(
+	bool Success,
+	string ResponseText,
+	string? OriginalCode,
+	Encoding? OriginalEncoding,
+	bool IsImage);
+
+/// <summary>
 /// Processes individual files by sending them to the LLM and handling the response.
 /// Manages streaming, progress display, token tracking, and file writing operations.
 /// </summary>
@@ -37,10 +48,13 @@ internal class FileProcessor
 	}
 
 	/// <summary>
-	/// Processes a single file: reads it, sends it to the LLM, and writes back the response.
-	/// Returns true if the file was processed successfully; false otherwise.
+	/// Processes a single file: reads it, sends it to the LLM, and returns a
+	/// <see cref="ProcessResult"/> with the raw LLM response and original content.
+	/// The caller is responsible for writing the result to disk via
+	/// <see cref="WriteResponseAsync"/>.
+	/// Returns a failed <see cref="ProcessResult"/> when streaming could not complete.
 	/// </summary>
-	internal async Task<bool> ProcessAsync(string file, string retryMessage, CancellationToken cancellationToken)
+	internal async Task<ProcessResult> ProcessAsync(string file, string retryMessage, CancellationToken cancellationToken)
 	{
 		var stopwatch = Stopwatch.StartNew();
 		var isImage = ImageHelper.IsImageFile(file);
@@ -48,10 +62,10 @@ internal class FileProcessor
 		// --- Read file content ---
 		var (originalCode, originalEncoding) = await ReadFileContentAsync(file, isImage, cancellationToken);
 		if (originalCode == null && !isImage)
-			return false;
+			return new ProcessResult(Success: false, ResponseText: string.Empty, OriginalCode: null, OriginalEncoding: null, IsImage: isImage);
 
 		if (!isImage && !ValidateFileTokenCount(file, originalCode!))
-			return false;
+			return new ProcessResult(Success: false, ResponseText: string.Empty, OriginalCode: null, OriginalEncoding: null, IsImage: isImage);
 
 		// --- Build messages ---
 		var systemPrompt = BuildSystemPrompt(file, originalCode, isImage);
@@ -72,13 +86,24 @@ internal class FileProcessor
 		// --- Stream response ---
 		var streamResult = await StreamResponseAsync(messages, userContent, options, retryMessage, tokenEstimates.ResponseTokens, cancellationToken);
 		if (streamResult == null)
-			return false;
+			return new ProcessResult(Success: false, ResponseText: string.Empty, originalCode, originalEncoding, isImage);
 
 		// --- Process token usage ---
 		LogTokenUsage(streamResult, tokenEstimates.InputTokens, stopwatch);
 
-		// --- Handle response ---
-		return await HandleResponseAsync(file, streamResult.ResponseText, originalCode, originalEncoding, isImage, cancellationToken);
+		return new ProcessResult(true, streamResult.ResponseText, originalCode, originalEncoding, isImage);
+	}
+
+	/// <summary>
+	/// Applies the LLM response from a completed <see cref="ProcessResult"/>:
+	/// either writes the extracted code block back to disk (when
+	/// <c>applyCodeblock</c> is true) or prints the response to the console.
+	/// Returns <c>true</c> on success; <c>false</c> when the code block could
+	/// not be extracted from the response.
+	/// </summary>
+	internal async Task<bool> WriteResponseAsync(string file, ProcessResult result, CancellationToken cancellationToken)
+	{
+		return await HandleResponseAsync(file, result.ResponseText, result.OriginalCode, result.OriginalEncoding, result.IsImage, cancellationToken);
 	}
 
 	// ──────────────────────────────────────────────────────────────────────
@@ -234,6 +259,9 @@ internal class FileProcessor
 		var reasoningTimeoutSeconds = _settings.ReasoningTimeoutSeconds ?? 600;
 		var reasoningTimeoutEnabled = reasoningTimeoutSeconds > 0;
 
+		// Diagnostic: log system prompt and user content before streaming
+		LogDiagnosticRequest(messages, userContent, retryMessage);
+
 		try
 		{
 			if (showProgress)
@@ -248,7 +276,42 @@ internal class FileProcessor
 		}
 
 		var response = streamingUpdates.ToChatResponse();
-		return new StreamResult(response?.Text ?? "", response, reasoningContentBuilder, reasoningUpdatesCount);
+		var responseText = response?.Text ?? "";
+
+		// Diagnostic: log full response after streaming
+		ConsoleLogger.LogDiagnosticBlock("Response", responseText);
+
+		return new StreamResult(responseText, response, reasoningContentBuilder, reasoningUpdatesCount);
+	}
+
+	/// <summary>
+	/// Logs the system prompt and user content to the console when diagnostic mode is enabled.
+	/// Text image content is summarised as "[image omitted]" to avoid binary noise.
+	/// </summary>
+	private static void LogDiagnosticRequest(List<ChatMessage> messages, IList<AIContent> userContent, string retryMessage)
+	{
+		if (!ConsoleLogger.Diagnostic)
+			return;
+
+		var systemPrompt = messages.FirstOrDefault(m => m.Role == ChatRole.System)?.Text ?? string.Empty;
+		ConsoleLogger.LogDiagnosticBlock("System", systemPrompt);
+
+		var userText = new StringBuilder();
+		foreach (var content in userContent)
+		{
+			if (content is TextContent tc)
+				userText.AppendLine(tc.Text);
+			else
+				userText.AppendLine("[image omitted]");
+		}
+
+		if (!string.IsNullOrWhiteSpace(retryMessage))
+		{
+			userText.AppendLine();
+			userText.AppendLine(retryMessage);
+		}
+
+		ConsoleLogger.LogDiagnosticBlock("User", userText.ToString());
 	}
 
 	private async Task StreamWithProgressAsync(
@@ -399,6 +462,30 @@ internal class FileProcessor
 	// ──────────────────────────────────────────────────────────────────────
 	// Token usage reporting
 	// ──────────────────────────────────────────────────────────────────────
+
+	/// <summary>
+	/// Accumulates judge token usage into the cumulative totals and logs a "Judge:" token line.
+	/// </summary>
+	internal void AccumulateJudgeTokens(UsageDetails? usage, Stopwatch judgeStopwatch)
+	{
+		if (usage is null)
+			return;
+
+		var inputTokens = (int)(usage.InputTokenCount ?? 0);
+		var outputTokens = (int)(usage.OutputTokenCount ?? 0);
+		var totalTokens = (int)(usage.TotalTokenCount ?? (inputTokens + outputTokens));
+
+		_cumulativeInputTokens += inputTokens;
+		_cumulativeOutputTokens += outputTokens;
+		_cumulativeTotalTokens += totalTokens;
+
+		var showProgress = _settings.ShowProgress ?? true;
+		if ((ConsoleLogger.Verbose || showProgress) && !_settings.DryRun)
+		{
+			ConsoleLogger.LogMarkup($"[gray]Judge:   {judgeStopwatch.Elapsed:hh':'mm':'ss}   [/][blue]{SYM_UP} {inputTokens,6:N0}[/]   [cyan]{SYM_DOWN} {outputTokens,6:N0}[/]   [gray]{SYM_PIPE}[/]   [yellow]{SYM_TOTAL} {totalTokens,6:N0}[/]");
+			ConsoleLogger.LogMarkup($"[gray]Total:   {_totalStopwatch.Elapsed:hh':'mm':'ss}   [/][blue]{SYM_UP} {_cumulativeInputTokens,6:N0}[/]   [cyan]{SYM_DOWN} {_cumulativeOutputTokens,6:N0}[/]   [gray]{SYM_PIPE}[/]   [yellow]{SYM_TOTAL} {_cumulativeTotalTokens,6:N0}[/]");
+		}
+	}
 
 	private void LogTokenUsage(StreamResult streamResult, int estimatedInputTokens, Stopwatch stopwatch)
 	{
