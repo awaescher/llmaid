@@ -33,25 +33,27 @@ maxRetries: 1
 #
 judgeMaxRetries: 2          # How many times the judge may reject and trigger a retry (0 = disabled)
 judgeMode: git-diff         # response (default) | git-diff | both
-# judgeModel: omnicoder-9b # Override model for judge calls (falls back to 'model' when omitted)
-# judgeProvider: lmstudio     # Override provider for judge calls (falls back to 'provider' when omitted)
-# judgeUri: http://localhost:1234/v1  # Override URI for judge calls (falls back to 'uri' when omitted)
-# judgeApiKey: ""             # Override API key for judge calls (falls back to 'apiKey' when omitted)
+# judgeModel: gpt-oss:20b   # Override model for judge calls (falls back to 'model' when omitted)
+# judgeProvider: lmstudio   # Override provider for judge calls (falls back to 'provider' when omitted)
+# judgeUri: ""              # Override URI for judge calls (falls back to 'uri' when omitted)
+# judgeApiKey: ""           # Override API key for judge calls (falls back to 'apiKey' when omitted)
 #
-# judgeSystemPrompt: |
-#   You are a strict code review judge for documentation-only changes.
-#   You receive:
-#   1. The documentation task instructions the AI editor had to follow
-#   2. Either the original file + AI response (response mode) or a git diff (git-diff mode)
-#
-#   PASS if only documentation comments were added or improved and no
-#   executable code was touched.
-#
-#   FAIL with a bullet list of violations if ANY of these occurred:
-#   - Executable code was modified (logic, variables, operators, formatting, imports, etc.)
-#   - Existing documentation was removed without a replacement
-#   - Private, protected, or internal members received new documentation
-#   - Any other change not explicitly permitted by the task instructions
+judgeSystemPrompt: |
+  You are a code review judge for documentation-only changes.
+
+  You receive:
+  1. The documentation task instructions the AI editor had to follow
+  2. Either the original file and the AI editor response and/or a git diff of the applied changes the AI editor made to the file.
+
+  Your job is to verify if the changes affect executable code or if they are strictly limited to documentation (comments, docstrings, doc blocks, etc.).
+  
+  Only return one of the following:
+   - "PASS" if the changes only affect comments/documentation
+   - "FAIL" with a bullet list if violation if executable (non-commenting) code was modified
+
+   Whitespace/newline differences should be ignored and do not count as modifications.
+
+   Keep your answers short and to the point. The AI editor will use your feedback to retry if you return "FAIL".
 # ─────────────────────────────────────────────────────────────────────────────
 
 files:
