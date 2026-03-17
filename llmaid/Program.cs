@@ -309,7 +309,7 @@ internal static class Program
 			if (string.IsNullOrWhiteSpace(diff))
 			{
 				// No changes were made — treat as pass (LLM said OK, nothing to judge)
-				ConsoleLogger.LogVerboseDetail("Judge: no diff detected, skipping git-diff review.");
+				ConsoleLogger.LogResult("Judge: no diff detected, skipping git-diff review.");
 				return true;
 			}
 
