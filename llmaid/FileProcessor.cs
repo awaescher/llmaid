@@ -103,6 +103,9 @@ internal class FileProcessor
 	/// </summary>
 	internal async Task<bool> WriteResponseAsync(string file, ProcessResult result, CancellationToken cancellationToken)
 	{
+		if (_settings.DryRun)
+			return true;
+
 		return await HandleResponseAsync(file, result.ResponseText, result.OriginalCode, result.OriginalEncoding, result.IsImage, cancellationToken);
 	}
 
