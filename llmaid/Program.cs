@@ -248,6 +248,8 @@ internal static class Program
 
 		for (var judgeAttempt = 1; judgeAttempt <= judgeMaxRetries; judgeAttempt++)
 		{
+			var judgeName = judgeAttempt == 1 ? "Judge" : $"Judge ({judgeAttempt}/{judgeMaxRetries})";
+
 			// ── Phase 1: Stream LLM response (no write yet) ──────────────────
 			var result = await ProcessFileWithRetries(file, settings, processor, judgeRetryMessage, cancellationToken);
 			if (!result.Success)
@@ -270,8 +272,8 @@ internal static class Program
 				{
 					var isLastAttempt = judgeAttempt >= judgeMaxRetries;
 					var failHeader = !isLastAttempt
-						? $"Judge [{judgeAttempt}/{judgeMaxRetries}]: ✗ FAIL — retrying without writing"
-						: $"Judge [{judgeAttempt}/{judgeMaxRetries}]: ✗ FAIL — maximum review cycles reached, file not written";
+						? $"{judgeName}: ✗ FAIL — retrying without writing"
+						: $"{judgeName}: ✗ FAIL — maximum review cycles reached, file not written";
 
 					ConsoleLogger.LogWarning(failHeader);
 					foreach (var violation in responseVerdict.Violations)
@@ -292,7 +294,7 @@ internal static class Program
 					continue; // retry — do not write
 				}
 
-				ConsoleLogger.LogResult($"Judge [{judgeAttempt}/{judgeMaxRetries}]: ✓ PASS");
+				ConsoleLogger.LogResult($"{judgeName}: ✓ PASS");
 			}
 	
 			// ── Phase 3: Write response to disk (or console) ─────────────────
