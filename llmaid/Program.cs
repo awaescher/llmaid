@@ -310,10 +310,18 @@ internal static class Program
 
 			if (string.IsNullOrWhiteSpace(diff))
 			{
+				// No diff on a fresh first attempt means the file was already correct — accept it.
+				// No diff after a FAIL+retry means the model became too cautious — treat as a new failure.
+				if (string.IsNullOrEmpty(judgeRetryMessage))
+				{
+					ConsoleLogger.LogResult($"{judgeName}: no changes — file already meets requirements.");
+					return true;
+				}
+
 				var noDiffIsLastAttempt = judgeAttempt >= judgeMaxRetries;
 				var noDiffHeader = !noDiffIsLastAttempt
-					? $"{judgeName}: no changes written — retrying"
-					: $"{judgeName}: no changes written — maximum review cycles reached, skipping file";
+					? $"{judgeName}: no changes written after retry — retrying"
+					: $"{judgeName}: no changes written after retry — maximum review cycles reached, skipping file";
 
 				ConsoleLogger.LogWarning(noDiffHeader);
 
