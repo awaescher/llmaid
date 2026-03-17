@@ -287,7 +287,7 @@ internal static class Program
 
 							{violationList}
 
-							Please redo the task, specifically addressing each violation listed above. Do NOT repeat these mistakes.
+							Please redo the full task. Make all required changes, but avoid the violations listed above.
 							""";
 					}
 
@@ -310,9 +310,22 @@ internal static class Program
 
 			if (string.IsNullOrWhiteSpace(diff))
 			{
-				// No changes were made — treat as pass (LLM said OK, nothing to judge)
-				ConsoleLogger.LogResult("Judge: no diff detected, skipping git-diff review.");
-				return true;
+				var noDiffIsLastAttempt = judgeAttempt >= judgeMaxRetries;
+				var noDiffHeader = !noDiffIsLastAttempt
+					? $"{judgeName}: no changes written — retrying"
+					: $"{judgeName}: no changes written — maximum review cycles reached, skipping file";
+
+				ConsoleLogger.LogWarning(noDiffHeader);
+
+				if (!noDiffIsLastAttempt)
+				{
+					judgeRetryMessage = """
+						Your previous response resulted in no changes to the file. This is not acceptable.
+						Please redo the full task and make all required changes as described in the instructions.
+						""";
+				}
+
+				continue;
 			}
 
 			var diffJudgeStopwatch = Stopwatch.StartNew();
@@ -323,15 +336,15 @@ internal static class Program
 
 			if (diffVerdict.Passed)
 			{
-				ConsoleLogger.LogResult($"Judge [{judgeAttempt}/{judgeMaxRetries}]: ✓ PASS");
+				ConsoleLogger.LogResult($"{judgeName}: ✓ PASS");
 				return true;
 			}
 	
 			// Diff-judge rejected — log violations and restore the file
 			var diffIsLastAttempt = judgeAttempt >= judgeMaxRetries;
 			var diffFailHeader = !diffIsLastAttempt
-				? $"Judge [{judgeAttempt}/{judgeMaxRetries}]: ✗ FAIL — restoring file and retrying"
-				: $"Judge [{judgeAttempt}/{judgeMaxRetries}]: ✗ FAIL — maximum review cycles reached, restoring original file";
+				? $"{judgeName}: ✗ FAIL — restoring file and retrying"
+				: $"{judgeName}]: ✗ FAIL — maximum review cycles reached, restoring original file";
 
 			ConsoleLogger.LogWarning(diffFailHeader);
 			foreach (var violation in diffVerdict.Violations)
@@ -349,7 +362,7 @@ internal static class Program
 
 					{violationList}
 
-					Please redo the task, specifically addressing each violation listed above. Do NOT repeat these mistakes.
+					Please redo the full task. Make all required changes, but avoid the violations listed above.
 					""";
 			}
 		}
@@ -382,7 +395,7 @@ internal static class Program
 			else
 				result = await processor.ProcessAsync(file, retryMessage, cancellationToken);
 
-		} while (!result.Success && attempt < settings.MaxRetries);
+		} while (!result.Success && attempt < (settings.MaxRetries ?? 0));
 
 		return result;
 	}
