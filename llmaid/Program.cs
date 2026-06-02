@@ -54,9 +54,11 @@ internal static class Program
 		InitializeLogging();
 
 		var chatClient = ChatClientFactory.Create(settings);
-
+	
 		LogStartupInfo(settings);
-
+	
+		InitializeReportFile(settings);
+	
 		var files = DiscoverFiles(settings);
 		var processor = new FileProcessor(chatClient, settings, Stopwatch.StartNew());
 
@@ -152,6 +154,61 @@ internal static class Program
 	{
 		ConsoleLogger.LogVerboseInfo($"Running {settings.Model} ({settings.Uri}) against {settings.TargetPath}." + Environment.NewLine);
 		ConsoleLogger.LogVerboseDetail(JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true }));
+	}
+
+	private static void InitializeReportFile(Settings settings)
+	{
+		if (string.IsNullOrWhiteSpace(settings.ReportFile))
+			return;
+
+		var reportPath = settings.ReportFile!;
+		var dir = Path.GetDirectoryName(reportPath);
+
+		if (!string.IsNullOrWhiteSpace(dir))
+			Directory.CreateDirectory(dir);
+
+		var applyCodeblock = settings.ApplyCodeblock ?? true;
+		var judgeEnabled = (settings.JudgeMaxRetries ?? 0) > 0;
+		var includePatterns = string.Join(", ", settings.Files?.Include ?? []);
+		var excludePatterns = string.Join(", ", settings.Files?.Exclude ?? []);
+		var filesColumn = string.IsNullOrEmpty(excludePatterns)
+			? includePatterns
+			: $"{includePatterns} (exclude: {excludePatterns})";
+
+		var header = $"""
+			# llmaid Report
+
+			Generated with [llmaid](https://github.com/awaescher/llmaid) using the following settings.
+
+			| Setting | Value |
+			|---------|-------|
+			| Generated | {DateTime.Now:yyyy-MM-dd HH:mm:ss} |
+			| Provider | {settings.Provider} |
+			| URI | {settings.Uri} |
+			| Model | {settings.Model} |
+			| Temperature | {settings.Temperature?.ToString() ?? "—"} |
+			| Target path | {settings.TargetPath} |
+			| Files | {(string.IsNullOrEmpty(filesColumn) ? "—" : filesColumn)} |
+			| Profile | {settings.Profile ?? "—"} |
+			| Apply codeblock | {applyCodeblock} |
+			| Max retries | {settings.MaxRetries?.ToString() ?? "—"} |
+			| Max file tokens | {settings.MaxFileTokens?.ToString() ?? "—"} |
+			| Dry run | {settings.DryRun} |
+			| Judge | {(judgeEnabled ? $"{settings.JudgeMaxRetries} retries, mode: {settings.JudgeMode ?? "response"}{(settings.JudgeModel != null ? $", model: {settings.JudgeModel}" : "")}" : "disabled")} |
+
+			## System Prompt
+
+			```
+			{(settings.SystemPrompt ?? string.Empty).Trim()}
+			```
+
+			---
+
+
+			""";
+
+		File.WriteAllText(reportPath, header);
+		ConsoleLogger.LogVerboseDetail($"Report file initialized: {reportPath}");
 	}
 
 	private static string[] DiscoverFiles(Settings settings)

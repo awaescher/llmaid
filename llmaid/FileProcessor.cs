@@ -48,6 +48,33 @@ internal class FileProcessor
 	}
 
 	/// <summary>
+	/// Appends a Markdown section for the given file and LLM response to the report file.
+	/// The section heading is the full file path.
+	/// When <c>applyCodeblock</c> is <c>true</c>, the response is wrapped in a fenced code block
+	/// (because code is expected); otherwise the response is written as plain Markdown text.
+	/// Does nothing when <see cref="Settings.ReportFile"/> is not configured.
+	/// </summary>
+	private async Task AppendToReportAsync(string file, string responseText, CancellationToken cancellationToken)
+	{
+		if (string.IsNullOrWhiteSpace(_settings.ReportFile))
+			return;
+
+		var applyCodeblock = _settings.ApplyCodeblock ?? true;
+		string section;
+
+		section = $"""
+			## {file}
+
+			{(applyCodeblock ? "```" : "")}
+			{responseText.Trim()}
+			{(applyCodeblock ? "```" : "")}
+
+			""";
+
+		await File.AppendAllTextAsync(_settings.ReportFile, section, cancellationToken);
+	}
+
+	/// <summary>
 	/// Processes a single file: reads it, sends it to the LLM, and returns a
 	/// <see cref="ProcessResult"/> with the raw LLM response and original content.
 	/// The caller is responsible for writing the result to disk via
@@ -562,6 +589,8 @@ internal class FileProcessor
 
 	private async Task<bool> HandleResponseAsync(string file, string responseText, string? originalCode, Encoding? originalEncoding, bool isImage, CancellationToken cancellationToken)
 	{
+		await AppendToReportAsync(file, responseText, cancellationToken);
+
 		if ((_settings.ApplyCodeblock ?? true) && !isImage)
 			return await ApplyCodeBlockAsync(file, responseText, originalCode, originalEncoding, cancellationToken);
 

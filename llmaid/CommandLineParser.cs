@@ -46,6 +46,7 @@ internal static class CommandLineParser
 		var judgeProviderOption = new Option<string>(MakeArgument(nameof(Settings.JudgeProvider)), "Provider for judge calls ('ollama', 'openai', 'lmstudio', or 'openai-compatible'). Only specify when the judge should use a different provider. Falls back to --provider when not set.");
 		var judgeUriOption = new Option<string>(MakeArgument(nameof(Settings.JudgeUri)), "API endpoint URI for judge calls. Only specify when the judge should connect to a different server. Falls back to --uri when not set.");
 		var judgeApiKeyOption = new Option<string>(MakeArgument(nameof(Settings.JudgeApiKey)), "API key for judge calls. Only specify when the judge provider requires a different key. Falls back to --apiKey when not set.");
+		var reportFileOption = new Option<string>(MakeArgument(nameof(Settings.ReportFile)), "Path to a Markdown report file. Each processed file gets a ## section with its full path and the LLM response as a fenced code block. Overwritten at startup, appended per file. Works with both applyCodeblock=true and false.");
 
 		// Toggle flags: can be specified without a value (defaults to true when present)
 		var applyCodeblockOption = new Option<bool?>(MakeArgument(nameof(Settings.ApplyCodeblock)), "Extract codeblock from response and overwrite file (false = output to console)");
@@ -96,7 +97,8 @@ internal static class CommandLineParser
 			judgeModelOption,
 			judgeProviderOption,
 			judgeUriOption,
-			judgeApiKeyOption
+			judgeApiKeyOption,
+			reportFileOption
 		};
 
 		// --- Bind parsed values to settings ---
@@ -128,6 +130,7 @@ internal static class CommandLineParser
 			settings.JudgeProvider = context.ParseResult.GetValueForOption(judgeProviderOption);
 			settings.JudgeUri = context.ParseResult.GetValueForOption(judgeUriOption) is string judgeUri && !string.IsNullOrWhiteSpace(judgeUri) ? new Uri(judgeUri) : null;
 			settings.JudgeApiKey = context.ParseResult.GetValueForOption(judgeApiKeyOption);
+			settings.ReportFile = context.ParseResult.GetValueForOption(reportFileOption);
 
 			// Toggle flags: when specified without value, they default to true
 			if (context.ParseResult.FindResultFor(applyCodeblockOption) is not null)

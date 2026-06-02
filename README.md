@@ -204,6 +204,7 @@ Available arguments:
 - `--judgeUri` – API endpoint for judge calls (falls back to `--uri` when not set)
 - `--judgeApiKey` – API key for judge calls (falls back to `--apiKey` when not set)
 - `--judgeSystemPrompt` – Custom system prompt for the judge LLM (uses a built-in default when not set)
+- `--reportFile` – Path to a Markdown report file. Each processed file gets a `##` section with its full path and the raw LLM response. The file is overwritten at startup and sections are appended as files are processed.
 
 ### Judge (Optional Quality Gate)
 

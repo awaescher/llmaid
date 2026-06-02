@@ -82,6 +82,16 @@ public class Settings
 	public bool? ApplyCodeblock { get; set; }
 
 	/// <summary>
+	/// Gets or sets the path to a Markdown report file that collects LLM responses for every processed file.
+	/// Each file gets a <c>##</c> section with its full path followed by the raw LLM response in a fenced code block.
+	/// The report file is overwritten at startup and a new section is appended after each file is processed.
+	/// Works for both <c>applyCodeblock: true</c> and <c>applyCodeblock: false</c>.
+	/// When not set, no report file is written.
+	/// </summary>
+	[JsonPropertyName("reportFile")]
+	public string? ReportFile { get; set; }
+
+	/// <summary>
 	/// Gets or sets a value indicating whether the operation should be a dry run.
 	/// If set to <c>true</c>, the operation will simulate the actions without making any actual changes.
 	/// </summary>
